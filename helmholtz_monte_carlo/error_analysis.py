@@ -2,7 +2,7 @@ from helmholtz_firedrake import problems as hh
 from helmholtz_firedrake import coefficients as coeff
 from helmholtz_firedrake import utils as hh_utils
 from helmholtz_firedrake.coefficients import SamplingError
-from helmholtz_monte_carlo.point_generation import mc_points
+import helmholtz_monte_carlo.point_generation as point_gen
 import firedrake as fd
 import numpy as np
 
@@ -74,14 +74,14 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,point_generation_method,
                 if point_generation_method is 'mc':
 
                     N = nu*(2**M)
-                    kl_mc_points = mc_points(J,N,point_generation_method,seed=1)
+                    kl_mc_points = point_gen.mc_points(J,N,point_generation_method,seed=1)
 
                 elif point_generation_method is 'qmc':
                     N = 2**M
-                    kl_mc_points = mc_points(J,N,point_generation_method,seed=1)
+                    kl_mc_points = point_gen.mc_points(J,N,point_generation_method,seed=1)
 
                 n_0 = 1.0
-                    
+                
                 kl_like = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,kl_mc_points)
 
                 # Create the problem
@@ -109,8 +109,7 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,point_generation_method,
 
                     for shift_no in range(nu):
                         # Randomly shift the points
-                        prob.n_stoch.reinitialise()
-                        prob.n_stoch.stochastic_points.shift()
+                        prob.n_stoch.change_all_points(point_gen.shift(kl_mc_points))
 
                         samples = all_qoi_samples(prob,qoi)
                         print('qmc samples')

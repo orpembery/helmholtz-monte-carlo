@@ -137,7 +137,7 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,point_generation_method,
         print(approx)
         print(error)
     
-    return None
+    return [k,approx,error]
                     
 
 def all_qoi_samples(prob,qoi):

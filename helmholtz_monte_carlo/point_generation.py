@@ -2,23 +2,7 @@ import numpy as np
 import latticeseq_b2
 from warnings import warn
 
-class mc_points(object):
-    """Holds a collection of integration points in many dimensions.
-
-    Attributes:
-
-    points - a numpy array containing the coordinates of the integration
-    points (see documentation for init).
-
-    Methods:
-
-    shift - shifts the points, 'wrapping them round' the unit cube if
-    necessary.
-    """
-
-    
-
-    def __init__(self,J,N,point_generation_method,seed=1):
+def mc_points(J,N,point_generation_method,seed=1):
         """Generates either Monte-Carlo or Quasi-Monte-Carlo integration
         points on the multi-dimensional [-1/2,1/2] cube.
 
@@ -43,19 +27,12 @@ class mc_points(object):
         of an integration point.
 
         """
-
-        self._J = J
-
-        self._N = N
-
-        self._point_generation_method = point_generation_method
-
         if point_generation_method is 'qmc':
 
-            self._M = int(np.log2(self._N))
+            M = int(np.log2(N))
 
-            if 2**self._M != self._N:
-                warn("N is not a power of 2, instead using N = " + str(2**self._M))
+            if 2**M != N:
+                warn("N is not a power of 2, instead using N = " + str(2**M))
                 
             # Generate QMC points on [-1/2,1/2]^J using Dirk Nuyens'
             # code
@@ -64,30 +41,36 @@ class mc_points(object):
             qmc_points = []
 
             # The following range will have M as its last term
-            for m in range((self._M+1)):
+            for m in range((M+1)):
                 qmc_points.append(qmc_generator.calc_block(m))
 
-            self.points = qmc_points[0]
+            points = qmc_points[0]
 
             for ii in range(1,len(qmc_points)):
-                self.points = np.vstack((self.points,qmc_points[ii]))
+                points = np.vstack((points,qmc_points[ii]))
 
         elif point_generation_method is 'mc':
-            self.points = np.random.rand(self._N,J)
+            points = np.random.rand(N,J)
 
-        self.points -= 0.5
+        points -= 0.5
 
-    def shift(self):
-        """Applies a random shift to points, 'wrapping them around' the
-        unit cube if needed."""
+        return points
 
-        shift = np.random.rand(1,self._J)        
-        
-        # Apply shift on the [0,1] cube
-        self.points += 0.5 + shift
+def shift(points):
+    """Applies a random shift to points, 'wrapping them around' the
+    unit cube if needed."""
 
-        # Do wrapping
-        self.points = np.divmod(self.points,1.0)[1]
+    J = points.shape[1]
+    
+    shift = np.random.rand(1,J)        
 
-        # Shift back to [-1,2/1,2] cube
-        self.points -= 0.5
+    # Apply shift on the [0,1] cube
+    points += 0.5 + shift
+
+    # Do wrapping
+    points = np.divmod(points,1.0)[1]
+
+    # Shift back to [-1,2/1,2] cube
+    points -= 0.5
+
+    return points

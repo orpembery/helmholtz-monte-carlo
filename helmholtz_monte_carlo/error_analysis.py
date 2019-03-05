@@ -6,7 +6,9 @@ import helmholtz_monte_carlo.point_generation as point_gen
 import firedrake as fd
 import numpy as np
 
-def investigate_error(k_range,h_spec,J_range,nu,M_range,point_generation_method,delta,lambda_mult,qoi,dim=2):
+def investigate_error(k_range,h_spec,J_range,nu,M_range,
+                      point_generation_method,
+                      delta,lambda_mult,qoi,dim=2):
     """Investigates the error in Monte-Carlo methods for Helmholtz.
 
     Computes an approximation to the root-mean-squared error in
@@ -54,16 +56,21 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,point_generation_method,
     helmholtz_firedrake.coefficients.UniformKLLikeCoeff for more
     information.
 
-    qoi - NEED TO SPECIFY WHAT QOIS ARE AVAILABLE
+    qoi - string - the Quantity of Interest that is computed. Currently the
+    only user option is 'integral' - the integral of the solution over the
+    domain. There is also an option 'testing', but this is used solely for
+    testing the functions.
 
     dim - either 2 or 3 - the spatial dimension of the Helmholtz
     Problem.
+
     """
     
     
     for k in k_range:
         print(k)
-        mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],dim)
+        mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],
+                                              dim)
 
         mesh = fd.UnitSquareMesh(mesh_points,mesh_points)
         
@@ -74,19 +81,23 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,point_generation_method,
                 if point_generation_method is 'mc':
 
                     N = nu*(2**M)
-                    kl_mc_points = point_gen.mc_points(J,N,point_generation_method,seed=1)
+                    kl_mc_points = point_gen.mc_points(
+                        J,N,point_generation_method,seed=1)
 
                 elif point_generation_method is 'qmc':
                     N = 2**M
-                    kl_mc_points = point_gen.mc_points(J,N,point_generation_method,seed=1)
+                    kl_mc_points = point_gen.mc_points(
+                        J,N,point_generation_method,seed=1)
 
                 n_0 = 1.0
                 
-                kl_like = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,kl_mc_points)
+                kl_like = coeff.UniformKLLikeCoeff(
+                    mesh,J,delta,lambda_mult,n_0,kl_mc_points)
 
                 # Create the problem
                 V = fd.FunctionSpace(mesh,"CG",1)
-                prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=kl_like)
+                prob = hh.StochasticHelmholtzProblem(
+                    k,V,A_stoch=None,n_stoch=kl_like)
 
                 prob.f_g_plane_wave()
 
@@ -102,14 +113,16 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,point_generation_method,
                     # Calculate the error - formula taken from [Graham,
                     # Kuo, Nuyens, Scheichl, Sloan, JCP 230,
                     # pp. 3668-3694 (2011), equation (4.4)]
-                    error = np.sqrt(((samples - approx)**2.0).sum()/(float(N)*float(N-1)))
+                    error = np.sqrt(((samples - approx)**2.0).sum()...
+                                    /(float(N)*float(N-1)))
 
                 if point_generation_method == 'qmc':
                     approximations = []
 
                     for shift_no in range(nu):
                         # Randomly shift the points
-                        prob.n_stoch.change_all_points(point_gen.shift(kl_mc_points))
+                        prob.n_stoch.change_all_points(
+                            point_gen.shift(kl_mc_points))
 
                         samples = all_qoi_samples(prob,qoi)
                         print('qmc samples')
@@ -126,15 +139,14 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,point_generation_method,
                     # Calculate the error - formula taken from [Graham,
                     # Kuo, Nuyens, Scheichl, Sloan, JCP 230,
                     # pp. 3668-3694 (2011), equation (4.6)]
-                    error = np.sqrt(((approximations-approx)**2).sum()/(float(nu)*(float(nu)-1.0)))
+                    error = np.sqrt(((approximations-approx)**2).sum()/...
+                                    (float(nu)*(float(nu)-1.0)))
                     
                 # Save approximation and error in appropriate data frame
 
-                # Save data frame to file with extra metadata (how? - utility function?) (And also output the results to screen?)
-
-        print(k)
-        print(approx)
-        print(error)
+                # Save data frame to file with extra metadata (how? -
+                # utility function?) (And also output the results to
+                # screen?)
     
     return [k,approx,error]
                     
@@ -152,9 +164,10 @@ def all_qoi_samples(prob,qoi):
 
     Outputs:
 
-    samples - numpy array containing the values of the QOI for each realisation.
-    """
+    samples - numpy array containing the values of the QOI for each
+    realisation.
 
+    """
     samples = []
 
     # For debugging
@@ -169,7 +182,6 @@ def all_qoi_samples(prob,qoi):
         
         #For debugging/testing
         if qoi is 'testing':
-            #samples.append(FUNCTION(prob.u_h))
             samples.append(dummy)
             dummy += 1.0
             
@@ -181,6 +193,5 @@ def all_qoi_samples(prob,qoi):
         # Get a SamplingError when there are no more realisations
         except SamplingError:
             break
-#        print('sampled!')
 
     return np.array(samples)

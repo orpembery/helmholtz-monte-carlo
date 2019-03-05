@@ -19,7 +19,8 @@ def mc_points(J,N,point_generation_method,seed=1):
         means the points are randomly generated according to a uniform
         distribution on the unit cube.
 
-        seed - seed with which to start the randomness.
+        seed - seed with which to start the randomness for Monte-Carlo
+        points
 
         Outputs:
 
@@ -50,6 +51,7 @@ def mc_points(J,N,point_generation_method,seed=1):
                 points = np.vstack((points,qmc_points[ii]))
 
         elif point_generation_method is 'mc':
+            np.random.seed(seed)
             points = np.random.rand(N,J)
 
         points -= 0.5

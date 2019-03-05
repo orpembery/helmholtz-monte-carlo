@@ -2,7 +2,7 @@ import numpy as np
 import latticeseq_b2
 from warnings import warn
 
-def mc_points(J,N,point_generation_method,seed=1):
+def mc_points(J,N,point_generation_method,seed=None):
         """Generates either Monte-Carlo or Quasi-Monte-Carlo integration
         points on the multi-dimensional [-1/2,1/2] cube.
 
@@ -20,7 +20,8 @@ def mc_points(J,N,point_generation_method,seed=1):
         distribution on the unit cube.
 
         seed - seed with which to start the randomness for Monte-Carlo
-        points
+        points. If seed is None, then no seed is set, and the underlying
+        random number generator is used.
 
         Outputs:
 
@@ -51,18 +52,20 @@ def mc_points(J,N,point_generation_method,seed=1):
                 points = np.vstack((points,qmc_points[ii]))
 
         elif point_generation_method is 'mc':
-            np.random.seed(seed)
-            points = np.random.rand(N,J)
+           set_numpy_seed(seed)
+           points = np.random.rand(N,J)
 
         points -= 0.5
 
         return points
 
-def shift(points):
+def shift(points,seed=None):
     """Applies a random shift to points, 'wrapping them around' the
     unit cube if needed."""
 
     J = points.shape[1]
+
+    set_numpy_seed(seed)
     
     shift = np.random.rand(1,J)        
 
@@ -76,3 +79,8 @@ def shift(points):
     points -= 0.5
 
     return points
+
+def set_numpy_seed(seed):
+    """Sets numpy random seed, if seed is not None."""
+    if seed is not None:
+        np.random.seed(seed)

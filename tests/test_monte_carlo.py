@@ -231,4 +231,23 @@ def test_calculate_qoi():
     # plane wave.
     assert np.isclose(samples[0],true_integral,atol=1e-16,rtol=1e-2)
 
+def test_set_seed():
+    """Checks the numpy seed setter works."""
+
+    np.random.seed(1)
+
+    random_number_1 = np.random.rand(1)
+
+    point_gen.set_numpy_seed(None)
+
+    random_number_2 = np.random.rand(1)
+
+    assert random_number_1 != random_number_2
+
+    point_gen.set_numpy_seed(1)
+
+    random_number_3 = np.random.rand(1)
+
+    assert random_number_1 == random_number_3
+
 

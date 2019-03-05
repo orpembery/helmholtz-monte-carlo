@@ -128,7 +128,7 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,
                     for shift_no in range(nu):
                         # Randomly shift the points
                         prob.n_stoch.change_all_points(
-                            point_gen.shift(kl_mc_points))
+                            point_gen.shift(kl_mc_points,seed=shift_no))
 
                         samples = all_qoi_samples(prob,qoi)
                         # Compute the approximation to the mean for

@@ -58,9 +58,11 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,
     information.
 
     qoi - string - the Quantity of Interest that is computed. Currently
-    the only user option is 'integral' - the integral of the solution
-    over the domain. There is also an option 'testing', but this is used
-    solely for testing the functions.
+    the only user options are:
+        'integral' - the integral of the solution over the domain.
+        'origin' the point value at the origin.
+    There is also an option 'testing', but this is used solely for
+    testing the functions.
 
     dim - either 2 or 3 - the spatial dimension of the Helmholtz
     Problem.
@@ -203,6 +205,11 @@ def all_qoi_samples(prob,qoi):
             func_real.dat.data[:] = np.real(prob.u_h.dat.data)
             func_imag.dat.data[:] = np.imag(prob.u_h.dat.data)
             samples.append(fd.assemble(func_real * fd.dx) + 1j*fd.assemble(func_imag * fd.dx))
+
+        elif qoi is 'origin':
+            # This (experimentally) gives the value of the function at
+            # (0,0).
+            samples.append(prob.u_h.dat.data[0])
 
         try:
             prob.sample()

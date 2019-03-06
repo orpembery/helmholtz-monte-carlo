@@ -175,8 +175,11 @@ def test_qmc_error_calculation():
     
     assert np.isclose(output[2],np.sqrt((float(nu)+1.0)/12.0))
 
-def test_calculate_qoi():
-    """Checks that the correct qoi is calculated for a single plane wave."""
+def test_qoi_integral():
+    """Checks that the correct qoi is calculated for a plane wave.
+
+    Qoi is the integral of the function over the domain.
+    """
 
     dim = 2
     
@@ -219,18 +222,73 @@ def test_calculate_qoi():
     true_integral = (1j/k)**float(dim) *  1.0/np.array(d_list).prod()\
                     * (1.0-np.exp(1j*k*np.array(d_list))).prod()
     
-    # This should be the integral over the unit square/cube of a plane wave
-    # I've tweaked the definition of 'closeness' as there's obviously some FEM
-    # error coming in here. But working on a finer mesh, you see that the
-    # computed value approaches the true integral (I've only run it for a plane
-    # wave incident from the bottom-left corner), so I'm confident this is
-    # computing the correct value, modulo FEM error.  The value of rtol has
-    # been chosen by looking at the error for a plane wave incident from the
-    # bottom left (d = [1/sqrt(2),1/sqrt(2)]), and choosing rtol so that test
-    # passes. However, the actual test above is run with a different incident
-    # plane wave.
+    # This should be the integral over the unit square/cube of a plane
+    # wave I've tweaked the definition of 'closeness' as there's
+    # obviously some FEM error coming in here. But working on a finer
+    # mesh, you see that the computed value approaches the true integral
+    # (I've only run it for a plane wave incident from the bottom-left
+    # corner), so I'm confident this is computing the correct value,
+    # modulo FEM error.  The value of rtol has been chosen by looking at
+    # the error for a plane wave incident from the bottom left (d =
+    # [1/sqrt(2),1/sqrt(2)]), and choosing rtol so that test
+    # passes. However, the actual test above is run with a different
+    # incident plane wave.
     assert np.isclose(samples[0],true_integral,atol=1e-16,rtol=1e-2)
 
+def test_qoi_origin():
+    """Checks that the correct qoi is calculated for a plane wave.
+
+    Qoi is the value of the function at the origin.
+    """
+
+    dim = 2
+    
+    k = 20.0
+
+    num_points = utils.h_to_num_cells(k**-1.5,dim)
+    
+    mesh = fd.UnitSquareMesh(num_points,num_points)
+
+    J = 1
+
+    delta = 2.0
+
+    lambda_mult = 1.0
+
+    n_0 = 1.0
+
+    num_points = 1
+
+    stochastic_points = np.zeros((num_points,J))
+    
+    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
+    
+    V = fd.FunctionSpace(mesh,"CG",1)
+
+    prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
+
+    d_list = [np.cos(np.pi/8.0),np.sin(np.pi/8.0)]
+
+    d = fd.as_vector(d_list)
+    prob.f_g_plane_wave()
+
+    prob.use_mumps()
+
+    samples = err_an.all_qoi_samples(prob,'origin')
+
+    # Should be just one sample
+    assert samples.shape[0] == 1
+
+    true_value = 1.0
+    
+    print(true_value)
+
+    print(samples[0])
+    # Tolerances values were ascertained to work for a different wave
+    # direction. They're also the same as those in the test above.
+    assert np.isclose(samples[0],true_value,atol=1e-16,rtol=1e-2)
+
+    
 def test_set_seed():
     """Checks the numpy seed setter works."""
 

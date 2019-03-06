@@ -89,6 +89,7 @@ def test_points_shift():
     assert shift_0.mean() < 0.07
 
 def test_all_qoi_samples():
+    """Test that the code correctly samples all of the stochastic points."""
     mesh = fd.UnitSquareMesh(10,10)
 
     J = 100
@@ -115,20 +116,19 @@ def test_all_qoi_samples():
 
     prob.use_mumps()
 
-    samples = err_an.all_qoi_samples(prob,'testing')
-
+    samples = err_an.all_qoi_samples(prob,['testing'])
     assert np.allclose(samples,np.arange(1.0,float(num_points)+1.0))
     
 def test_mc_calculation():
-    k_range = [1.0]
+    k = 1.0
 
     h_spec = (1.0,-1.5)
 
-    J_range = [100]
+    J = 100
 
     nu = 16
 
-    M_range = [4]
+    M = 4
 
     point_generation_method = 'mc'
 
@@ -136,28 +136,28 @@ def test_mc_calculation():
 
     lambda_mult = 1.0
 
-    qoi = 'testing'
+    qois = ['testing']
 
-    output = err_an.investigate_error(k_range,h_spec,J_range,nu,M_range,
+    output = err_an.investigate_error(k,h_spec,J,nu,M,
                                       point_generation_method,
-                                      delta,lambda_mult,qoi,dim=2)
+                                      delta,lambda_mult,qois,dim=2)
 
-    N = float(nu*2**M_range[0])
+    N = float(nu*2**M)
     
     assert np.isclose(output[1],(N+1.0)/2.0)
     
     assert np.isclose(output[2],np.sqrt((N+1.0)/12.0))
 
 def test_qmc_error_calculation():
-    k_range = [1.0]
+    k = 1.0
 
     h_spec = (1.0,-1.5)
 
-    J_range = [100]
+    J = 100
 
     nu = 16
 
-    M_range = [4]
+    M = 4
 
     point_generation_method = 'qmc'
 
@@ -165,11 +165,11 @@ def test_qmc_error_calculation():
 
     lambda_mult = 1.0
 
-    qoi = 'testing_qmc'
+    qois = ['testing_qmc']
 
-    output = err_an.investigate_error(k_range,h_spec,J_range,nu,M_range,
+    output = err_an.investigate_error(k,h_spec,J,nu,M,
                                       point_generation_method,
-                                      delta,lambda_mult,qoi,dim=2)
+                                      delta,lambda_mult,qois,dim=2)
     
     assert np.isclose(output[1],(float(nu)+1.0)/2.0)
     
@@ -214,9 +214,11 @@ def test_qoi_integral():
 
     prob.use_mumps()
 
-    samples = err_an.all_qoi_samples(prob,'integral')
+    samples = err_an.all_qoi_samples(prob,['integral'])
 
     # Should be just one sample
+    print(samples.shape)
+    print(samples)
     assert samples.shape[0] == 1
 
     true_integral = (1j/k)**float(dim) *  1.0/np.array(d_list).prod()\
@@ -274,7 +276,7 @@ def test_qoi_origin():
 
     prob.use_mumps()
 
-    samples = err_an.all_qoi_samples(prob,'origin')
+    samples = err_an.all_qoi_samples(prob,['origin'])
 
     # Should be just one sample
     assert samples.shape[0] == 1

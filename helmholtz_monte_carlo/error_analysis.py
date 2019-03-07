@@ -59,8 +59,8 @@ def investigate_error(k,h_spec,J,nu,M,
     are:
         'integral' - the integral of the solution over the domain.
         'origin' the point value at the origin.
-    There is also an option 'testing', but this is used solely for
-    testing the functions.
+    There are also the options 'testing' and 'testing_qmc', but these are
+    used solely for testing the functions.
 
     dim - either 2 or 3 - the spatial dimension of the Helmholtz
     Problem.
@@ -71,7 +71,7 @@ def investigate_error(k,h_spec,J,nu,M,
     the mean of the qoi, list of estimates of the error in the
     approximations].
     """
-
+    
     num_qois = len(qois)
     
     mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],
@@ -113,57 +113,54 @@ def investigate_error(k,h_spec,J,nu,M,
         error = []
         # Calculate the approximation
         for ii in range(num_qois):
+
             this_approx = samples[ii].mean()
             approx.append(this_approx)
                         
-        # Calculate the error - formula taken from
-        # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
-        # 230, pp. 3668-3694 (2011), equation (4.4)]
-        this_error = np.sqrt(((samples[ii] - approx)**2.0).sum()\
-                             /(float(N)*float(N-1)))
-        error.append(this_error)
+            # Calculate the error - formula taken from
+            # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
+            # 230, pp. 3668-3694 (2011), equation (4.4)]
+            this_error = np.sqrt(((samples[ii] - this_approx)**2.0).sum()\
+            /(float(N)*float(N-1)))
+            error.append(this_error)
                         
     elif point_generation_method == 'qmc':
-
         approx = []
         
         error = []
-        
-        for ii in range(num_qois):
+
+        all_approximations = [[] for ii in range(num_qois)]
+                   
+        for shift_no in range(nu):
+            # Randomly shift the points
+            prob.n_stoch.change_all_points(
+                point_gen.shift(kl_mc_points,seed=shift_no))
+
+            this_samples = all_qoi_samples(prob,qois)
+            # Compute the approximation to the mean for
+            # these shifted points
             
-            approximations = []
-            
-            for shift_no in range(nu):
-                # Randomly shift the points
-                prob.n_stoch.change_all_points(
-                    point_gen.shift(kl_mc_points,seed=shift_no))
+            # For testing
+            if qois == ['testing_qmc']:
+                this_samples = [np.array(float(shift_no+1))]
+            elif qois == ['testing_qmc','testing_qmc']:
+                this_samples = [np.array(float(shift_no+1)),np.array(float(shift_no+1))]
                 
-                samples = all_qoi_samples(prob,qois)
-                # Compute the approximation to the mean for
-                # these shifted points
+            for ii in range(num_qois):
+
+                all_approximations[ii].append(this_samples[ii].mean())
+
+        all_approximations = [np.array(approximation) for approximation in all_approximations]
                 
-                # For testing
-                if qois == ['testing_qmc']:
-                    samples = np.array([float(shift_no+1)])
-                        
-                approximations.append(samples.mean())
+        # Calculate the QMC approximations for each qoi
+        approx = [approximation.mean() for approximation in all_approximations]
 
-            approximations = np.array(approximations)
+        # Calculate the error for each qoi - formula taken from
+        # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
+        # 230, pp. 3668-3694 (2011), equation (4.6)]
+        error = [np.sqrt(((approx[ii]-all_approximations[ii])**2).sum()\
+                             /(float(nu)*(float(nu)-1.0))) for ii in range(num_qois)]
 
-            # Calculate the overall approximation to the
-            # mean for this shift
-            this_approx = approximations.mean()
-
-            # Calculate the error - formula taken from
-            # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
-            # 230, pp. 3668-3694 (2011), equation (4.6)]
-            this_error = np.sqrt(((approximations-this_approx)**2).sum()\
-                                 /(float(nu)*(float(nu)-1.0)))
-
-            approx.append(this_approx)
-            
-            error.append(this_error)
-                    
     # Save approximation and error in appropriate data frame
     # TODO
 
@@ -187,51 +184,113 @@ def all_qoi_samples(prob,qois):
 
     Outputs:
 
-    samples - numpy array containing the values of the qoi for each
-    realisation. Each row corresponds to a different qoi.
+    samples - list of numpy arrays containing the values of each qoi for
+    each realisation. samples[ii] corresponds to qois[ii].
 
     """
-    samples = []
+    num_qois = len(qois)
     
-    for qoi in qois:
-    
-        this_samples = []
+    samples = [[] for ii in range(num_qois)]
 
-        if qoi is 'testing':    
-            dummy = 1.0
+    # For testing purposes
+    dummy = 1.0
 
-        sample_no = 0
+    sample_no = 0
+    while True:
+        sample_no += 1
+        prob.solve()        
 
-        while True:
-            sample_no += 1
-            print(sample_no)
-            prob.solve()
+        # Using 'set' below means we only tackle each qoi once.
+        for this_qoi in set(qois):
 
-            if qoi is 'testing':
-                this_samples.append(dummy)
-                dummy += 1.0
+            # This is a little hack that helps with testing
+            if this_qoi is 'testing':
+                prob_input = dummy
+            else:
+                prob_input = prob
+                
+            this_qoi_findings = qoi_finder(qois,this_qoi)
+            
+            if this_qoi_findings[0]:
+                for ii in this_qoi_findings[1]:
+                    samples[ii].append(qoi_eval(prob_input,this_qoi))       
 
-            elif qoi is 'integral':
-                # This is currently a bit of a hack, because there's a bug
-                # in complex firedrake.
-                V = prob.u_h.function_space()
-                func_real = fd.Function(V)
-                func_imag = fd.Function(V)
-                func_real.dat.data[:] = np.real(prob.u_h.dat.data)
-                func_imag.dat.data[:] = np.imag(prob.u_h.dat.data)
-                this_samples.append(fd.assemble(func_real * fd.dx) + 1j*fd.assemble(func_imag * fd.dx))
+        try:
+            prob.sample()
+            # Next line is only for testing
+            dummy += 1.0
+        # Get a SamplingError when there are no more realisations
+        except SamplingError:
+            prob.n_stoch.reinitialise()
+            break
 
-            elif qoi is 'origin':
-                # This (experimentally) gives the value of the function at
-                # (0,0).
-                this_samples.append(prob.u_h.dat.data[0])
+    samples = [np.array(this_samples) for this_samples in samples]
 
-            try:
-                prob.sample()
-            # Get a SamplingError when there are no more realisations
-            except SamplingError:
-                break
+    return samples
 
-        samples.append(this_samples)
+def qoi_finder(qois,this_qoi):
+    """Helper function that finds this_qoi in qois.
 
-    return np.array(samples)
+    Parameters:
+
+    qois - list of strings
+
+    this_qoi - a string
+
+    Returns:
+
+    list, the entries of which are:
+
+    in_list - Boolean - True if this_qoi is an element of qois, False
+    otherwise.
+
+    indices- list of ints - the entries of qois that are this_qoi. Empty
+    list if in_list is False.
+
+    """
+    in_list = this_qoi in qois
+
+    indices = []
+    if in_list:
+        current_pos = 0
+        for ii in range(qois.count(this_qoi)):
+            this_index = qois.index(this_qoi,current_pos)
+            indices.append(this_index)
+            current_pos = this_index + 1
+
+    return [in_list,indices]
+
+def qoi_eval(prob,this_qoi):
+    """Helper function that evaluates qois.
+
+    prob - Helmholtz problem (or, for testing purposes only, a float)
+
+    this_qoi - string, one of ['testing','integral','origin']
+
+    output - the value of the qoi for this realisation of the
+    problem. None if this_qoi is not in the list above.
+
+    """
+    if this_qoi is 'testing':
+        output = prob
+
+    elif this_qoi is 'integral':
+        # This is currently a bit of a hack, because there's a bug
+        # in complex firedrake.
+        V = prob.u_h.function_space()
+        func_real = fd.Function(V)
+        func_imag = fd.Function(V)
+        func_real.dat.data[:] = np.real(prob.u_h.dat.data)
+        func_imag.dat.data[:] = np.imag(prob.u_h.dat.data)
+        output = fd.assemble(func_real * fd.dx) + 1j * fd.assemble(func_imag * fd.dx)
+
+    elif this_qoi is 'origin':
+        # This (experimentally) gives the value of the function at
+        # (0,0).
+        output = prob.u_h.dat.data[0]
+
+    else:
+        output = None
+
+    return output
+        

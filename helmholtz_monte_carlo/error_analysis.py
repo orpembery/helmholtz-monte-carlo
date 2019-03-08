@@ -8,7 +8,7 @@ import numpy as np
 
 def investigate_error(k,h_spec,J,nu,M,
                       point_generation_method,
-                      delta,lambda_mult,qois,dim=2):
+                      delta,lambda_mult,qois,dim=2,display_progress=False):
     """Investigates the error in Monte-Carlo methods for Helmholtz.
 
     Computes an approximation to the root-mean-squared error in
@@ -59,17 +59,21 @@ def investigate_error(k,h_spec,J,nu,M,
     are:
         'integral' - the integral of the solution over the domain.
         'origin' the point value at the origin.
-    There are also the options 'testing' and 'testing_qmc', but these are
-    used solely for testing the functions.
+    There are also the options 'testing' and 'testing_qmc', but these
+    are used solely for testing the functions.
 
     dim - either 2 or 3 - the spatial dimension of the Helmholtz
     Problem.
+
+    display_progress - boolean - if true, prints the sample number each
+    time we sample.
 
     Output:
 
     results - list containing 3 items: [k,list of the approximations to
     the mean of the qoi, list of estimates of the error in the
     approximations].
+
     """
     
     num_qois = len(qois)
@@ -106,7 +110,7 @@ def investigate_error(k,h_spec,J,nu,M,
                 
     if point_generation_method is 'mc':
 
-        samples = all_qoi_samples(prob,qois)
+        samples = all_qoi_samples(prob,qois,display_progress)
         
         approx = []
         
@@ -132,11 +136,13 @@ def investigate_error(k,h_spec,J,nu,M,
         all_approximations = [[] for ii in range(num_qois)]
                    
         for shift_no in range(nu):
+            if display_progress:
+                print(shift_no+1)
             # Randomly shift the points
             prob.n_stoch.change_all_points(
                 point_gen.shift(kl_mc_points,seed=shift_no))
 
-            this_samples = all_qoi_samples(prob,qois)
+            this_samples = all_qoi_samples(prob,qois,display_progress)
             # Compute the approximation to the mean for
             # these shifted points
             
@@ -171,7 +177,7 @@ def investigate_error(k,h_spec,J,nu,M,
     return [k,approx,error]
                     
 
-def all_qoi_samples(prob,qois):
+def all_qoi_samples(prob,qois,display_progress):
     """Computes all samples of the qoi for a StochasticHelmholtzProblem.
 
     This is a helper function for investigate_error.
@@ -181,6 +187,9 @@ def all_qoi_samples(prob,qois):
     prob - a StochasticHelmholtzProblem
 
     qois - list of some of the qois allowed in investigate_error.
+
+    display_progress - boolean - if true, prints the sample number each
+    time we sample.
 
     Outputs:
 
@@ -198,6 +207,9 @@ def all_qoi_samples(prob,qois):
     sample_no = 0
     while True:
         sample_no += 1
+        if display_progress:
+            print(sample_no)
+            
         prob.solve()        
 
         # Using 'set' below means we only tackle each qoi once.
@@ -283,7 +295,7 @@ def qoi_eval(prob,this_qoi):
         func_real.dat.data[:] = np.real(prob.u_h.dat.data)
         func_imag.dat.data[:] = np.imag(prob.u_h.dat.data)
         output = fd.assemble(func_real * fd.dx) + 1j * fd.assemble(func_imag * fd.dx)
-
+        
     elif this_qoi is 'origin':
         # This (experimentally) gives the value of the function at
         # (0,0).

@@ -420,7 +420,7 @@ def test_qoi_finder():
 
     assert output[1] == []
 
-@pytest.mark.xfail
+#@pytest.mark.xfail
 def test_qoi_eval_integral():
     """Tests that qois are evaluated correctly."""
 
@@ -450,8 +450,8 @@ def test_qoi_eval_integral():
     V = fd.FunctionSpace(mesh,"CG",1)
 
     prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
-
-    d_list = [np.cos(np.pi/16.0),np.sin(np.pi/16.0)]
+    d_list = [np.cos(2.0*np.pi/3.0),np.sin(2.0*np.pi/3.0)]
+    #d_list = [np.cos(np.pi/16.0),np.sin(np.pi/16.0)]
     # If d_list is changed to anything other than
     # [np.cos(np.pi/4.0),np.sin(np.pi/4.0)]; I've tried
     # [np.cos(2.0*np.pi/7.0),np.sin(2.0*np.pi/7.0)],
@@ -469,7 +469,8 @@ def test_qoi_eval_integral():
     # For the integral of the solution
     output = err_an.qoi_eval(prob,'integral')
     
-   true_integral = plane_wave_integral(d_list,k,dim)
+
+    true_integral = plane_wave_integral(d_list,k,dim)
     
     # This should be the integral over the unit square/cube of a plane
     # wave I've tweaked the definition of 'closeness' as there's
@@ -482,6 +483,7 @@ def test_qoi_eval_integral():
     # [1/sqrt(2),1/sqrt(2)]), and choosing rtol so that test
     # passes. However, the actual test above is run with a different
     # incident plane wave.
+    print(output)
     assert np.isclose(output,true_integral,atol=1e-16,rtol=1e-2)
 
     

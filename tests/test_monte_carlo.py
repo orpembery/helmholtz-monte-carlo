@@ -224,8 +224,7 @@ def test_qoi_samples_integral():
     # Should be just one sample
     assert samples[0].shape[0] == 1
 
-    true_integral = (1j/k)**float(dim) *  1.0/np.array(d_list).prod()\
-                    * (1.0-np.exp(1j*k*np.array(d_list))).prod()
+    true_integral = plane_wave_integral(d_list,k,dim)
     
     # This should be the integral over the unit square/cube of a plane
     # wave I've tweaked the definition of 'closeness' as there's
@@ -430,7 +429,7 @@ def test_qoi_eval_integral():
     
     k = 20.0
 
-    num_points = utils.h_to_num_cells(k**-1.5,dim) # changed here
+    num_points = utils.h_to_num_cells(k**-1.5,dim)
     
     mesh = fd.UnitSquareMesh(num_points,num_points)
 
@@ -469,9 +468,8 @@ def test_qoi_eval_integral():
 
     # For the integral of the solution
     output = err_an.qoi_eval(prob,'integral')
-
-    true_integral = (1j/k)**float(dim) *  1.0/np.array(d_list).prod()\
-                    * (1.0-np.exp(1j*k*np.array(d_list))).prod()
+    
+   true_integral = plane_wave_integral(d_list,k,dim)
     
     # This should be the integral over the unit square/cube of a plane
     # wave I've tweaked the definition of 'closeness' as there's
@@ -527,7 +525,7 @@ def test_qoi_eval_origin():
 
     prob.solve()
 
-        # For the value of the solution at the origin:
+    # For the value of the solution at the origin:
     output = err_an.qoi_eval(prob,'origin')
     # Tolerances values were ascertained to work for a different wave
     # direction. They're also the same as those in the test above.
@@ -585,8 +583,25 @@ def test_qoi_eval_dummy():
     output = err_an.qoi_eval(this_dummy,'testing')
 
     assert np.isclose(output,this_dummy)
-    
 
-    
+def plane_wave_integral(d_list,k,dim):
+    """Helper function.
 
-    
+    Calculates the exact integral of a plane wave on the unit square.
+
+    d_list - list of floats - list giving the wave direction
+
+    dim - int - the spatial dimension
+
+    k - float - the wavenumber
+
+    output - float - the integral over the square.
+    """
+    d_calc = np.array(d_list)
+
+    d_prod = d_calc.prod()
+
+    integral_1 = (-1j/(k*d_prod))**dim
+    integral_2 = (1 + np.exp(1j * k * d_calc)).prod()
+
+    return integral_1 * integral_2

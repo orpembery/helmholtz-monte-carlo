@@ -6,9 +6,9 @@ import helmholtz_monte_carlo.point_generation as point_gen
 import firedrake as fd
 import numpy as np
 
-def investigate_error(k_range,h_spec,J_range,nu,M_range,
+def investigate_error(k,h_spec,J,nu,M,
                       point_generation_method,
-                      delta,lambda_mult,qoi,dim=2):
+                      delta,lambda_mult,qois,dim=2,display_progress=False):
     """Investigates the error in Monte-Carlo methods for Helmholtz.
 
     Computes an approximation to the root-mean-squared error in
@@ -19,28 +19,25 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,
 
     Parameters:
 
-    k_range - list of positive floats - the range of k for which to do
-    computations. CURRENTLY ONLY SUPPORTS k_range OF LENGTH 1.
+    k - positive float - the wavenumber for which to do computations.
 
     h_spec - 2-tuple - h_spec[0] should be a positive float and
     h_spec[1] should be a float. These specify the values of the mesh
     size h for which we will run experiments.
     h = h_spec[0] * k**h_spec[1].
 
-    J_range - list of positive ints - the range of stochastic dimensions
-    in the artificial-KL expansion for which to do
-    experiments. CURRENTLY ONLY SUPPORTS J_range OF LENGTH 1.
+    J - positive int - the stochastic dimension in the artificial-KL
+    expansion for which to do experiments.
 
     nu - positive int - the number of random shifts to use in
     randomly-shifted QMC methods. Combiones with M to give number of
     integration points for Monte Carlo.
 
-    M_range - list of positive ints - Specifies the range of numbers of
-    integration points for which to do computations - NOTE: for Monte
-    Carlo, the number of integration points will be given by
-    nu*(2**M). For Quasi-Monte Carlo, we will sample 2**m integration
-    points, and then randomly shift these nu times as part of the
-    estimator. CURRENTLY ONLY SUPPORTS M_range OF LENGTH 1.
+    M - positive ints - Specifies the number of integration points for
+    which to do computations - NOTE: for Monte Carlo, the number of
+    integration points will be given by nu*(2**M). For Quasi-Monte
+    Carlo, we will sample 2**m integration points, and then randomly
+    shift these nu times as part of the estimator.
 
     point_generation_method - either 'qmc' or 'mc'. 'qmc' means a QMC
     lattice rule is used to generate the points, whereas 'mc' means the
@@ -57,113 +54,130 @@ def investigate_error(k_range,h_spec,J_range,nu,M_range,
     helmholtz_firedrake.coefficients.UniformKLLikeCoeff for more
     information.
 
-    qoi - string - the Quantity of Interest that is computed. Currently
-    the only user options are:
+    qois - list of strings - the Quantities of Interest that are
+    computed. Currently the only options for the elements of the string
+    are:
         'integral' - the integral of the solution over the domain.
         'origin' the point value at the origin.
-    There is also an option 'testing', but this is used solely for
-    testing the functions.
+    There are also the options 'testing' and 'testing_qmc', but these
+    are used solely for testing the functions.
 
     dim - either 2 or 3 - the spatial dimension of the Helmholtz
     Problem.
 
+    display_progress - boolean - if true, prints the sample number each
+    time we sample.
+
     Output:
 
-    results - list containing 3 items, corresponding to the last element
-    of k_range: [k,the approximation to the mean of the qoi, an estimate
-    of the error in the approximation]
+    results - list containing 3 items: [k,list of the approximations to
+    the mean of the qoi, list of estimates of the error in the
+    approximations].
+
     """
     
+    num_qois = len(qois)
     
-    for k in k_range:
-        print(k)
-        mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],
+    mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],
                                               dim)
 
-        mesh = fd.UnitSquareMesh(mesh_points,mesh_points)
+    mesh = fd.UnitSquareMesh(mesh_points,mesh_points)
         
-        for J in J_range:           
+    if point_generation_method is 'mc':
 
-            for M in M_range:
+        N = nu*(2**M)
+        kl_mc_points = point_gen.mc_points(
+            J,N,point_generation_method,seed=1)
 
-                if point_generation_method is 'mc':
+    elif point_generation_method is 'qmc':
+        N = 2**M
+        kl_mc_points = point_gen.mc_points(
+            J,N,point_generation_method,seed=1)
 
-                    N = nu*(2**M)
-                    kl_mc_points = point_gen.mc_points(
-                        J,N,point_generation_method,seed=1)
-
-                elif point_generation_method is 'qmc':
-                    N = 2**M
-                    kl_mc_points = point_gen.mc_points(
-                        J,N,point_generation_method,seed=1)
-
-                n_0 = 1.0
+    n_0 = 1.0
                 
-                kl_like = coeff.UniformKLLikeCoeff(
-                    mesh,J,delta,lambda_mult,n_0,kl_mc_points)
+    kl_like = coeff.UniformKLLikeCoeff(
+        mesh,J,delta,lambda_mult,n_0,kl_mc_points)
 
-                # Create the problem
-                V = fd.FunctionSpace(mesh,"CG",1)
-                prob = hh.StochasticHelmholtzProblem(
-                    k,V,A_stoch=None,n_stoch=kl_like)
+    # Create the problem
+    V = fd.FunctionSpace(mesh,"CG",1)
+    prob = hh.StochasticHelmholtzProblem(
+        k,V,A_stoch=None,n_stoch=kl_like)
 
-                prob.f_g_plane_wave()
+    prob.f_g_plane_wave()
 
-                prob.use_mumps()
+    prob.use_mumps()
                 
-                if point_generation_method is 'mc':
+    if point_generation_method is 'mc':
 
-                    samples = all_qoi_samples(prob,qoi)
-                                        
-                    # Calculate the approximation
-                    approx = samples.mean()
+        samples = all_qoi_samples(prob,qois,display_progress)
+        
+        approx = []
+        
+        error = []
+        # Calculate the approximation
+        for ii in range(num_qois):
 
-                    # Calculate the error - formula taken from [Graham,
-                    # Kuo, Nuyens, Scheichl, Sloan, JCP 230,
-                    # pp. 3668-3694 (2011), equation (4.4)]
-                    error = np.sqrt(((samples - approx)**2.0).sum()\
-                                    /(float(N)*float(N-1)))
-
-                if point_generation_method == 'qmc':
-                    approximations = []
-
-                    for shift_no in range(nu):
-                        # Randomly shift the points
-                        prob.n_stoch.change_all_points(
-                            point_gen.shift(kl_mc_points,seed=shift_no))
-
-                        samples = all_qoi_samples(prob,qoi)
-                        # Compute the approximation to the mean for
-                        # these shifted points
-
-                        # For testing
-                        if qoi == 'testing_qmc':
-                            samples = np.array([float(shift_no+1)])
+            this_approx = samples[ii].mean()
+            approx.append(this_approx)
                         
-                        approximations.append(samples.mean())
+            # Calculate the error - formula taken from
+            # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
+            # 230, pp. 3668-3694 (2011), equation (4.4)]
+            this_error = np.sqrt(((samples[ii] - this_approx)**2.0).sum()\
+            /(float(N)*float(N-1)))
+            error.append(this_error)
+                        
+    elif point_generation_method == 'qmc':
+        approx = []
+        
+        error = []
 
-                    approximations = np.array(approximations)
+        all_approximations = [[] for ii in range(num_qois)]
+                   
+        for shift_no in range(nu):
+            if display_progress:
+                print(shift_no+1)
+            # Randomly shift the points
+            prob.n_stoch.change_all_points(
+                point_gen.shift(kl_mc_points,seed=shift_no))
 
-                    # Calculate the overall approximation to the mean
-                    approx = approximations.mean()
+            this_samples = all_qoi_samples(prob,qois,display_progress)
+            # Compute the approximation to the mean for
+            # these shifted points
+            
+            # For testing
+            if qois == ['testing_qmc']:
+                this_samples = [np.array(float(shift_no+1))]
+            elif qois == ['testing_qmc','testing_qmc']:
+                this_samples = [np.array(float(shift_no+1)),np.array(float(shift_no+1))]
+                
+            for ii in range(num_qois):
 
-                    # Calculate the error - formula taken from [Graham,
-                    # Kuo, Nuyens, Scheichl, Sloan, JCP 230,
-                    # pp. 3668-3694 (2011), equation (4.6)]
-                    error = np.sqrt(((approximations-approx)**2).sum()\
-                                    /(float(nu)*(float(nu)-1.0)))
-                    
-                # Save approximation and error in appropriate data frame
-                # TODO
+                all_approximations[ii].append(this_samples[ii].mean())
 
-                # Save data frame to file with extra metadata (how? -
-                # utility function?)
-                # TODO
+        all_approximations = [np.array(approximation) for approximation in all_approximations]
+                
+        # Calculate the QMC approximations for each qoi
+        approx = [approximation.mean() for approximation in all_approximations]
+
+        # Calculate the error for each qoi - formula taken from
+        # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
+        # 230, pp. 3668-3694 (2011), equation (4.6)]
+        error = [np.sqrt(((approx[ii]-all_approximations[ii])**2).sum()\
+                             /(float(nu)*(float(nu)-1.0))) for ii in range(num_qois)]
+
+    # Save approximation and error in appropriate data frame
+    # TODO
+
+    # Save data frame to file with extra metadata (how? -
+    # utility function?)
+    # TODO
     
     return [k,approx,error]
                     
 
-def all_qoi_samples(prob,qoi):
+def all_qoi_samples(prob,qois,display_progress):
     """Computes all samples of the qoi for a StochasticHelmholtzProblem.
 
     This is a helper function for investigate_error.
@@ -172,49 +186,123 @@ def all_qoi_samples(prob,qoi):
 
     prob - a StochasticHelmholtzProblem
 
-    qoi - one of the QOIs allowed in investigate_error.
+    qois - list of some of the qois allowed in investigate_error.
+
+    display_progress - boolean - if true, prints the sample number each
+    time we sample.
 
     Outputs:
 
-    samples - numpy array containing the values of the QOI for each
-    realisation.
+    samples - list of numpy arrays containing the values of each qoi for
+    each realisation. samples[ii] corresponds to qois[ii].
 
     """
-    samples = []
+    num_qois = len(qois)
+    
+    samples = [[] for ii in range(num_qois)]
 
-    if qoi is 'testing':    
-        dummy = 1.0
+    # For testing purposes
+    dummy = 1.0
 
     sample_no = 0
-    
     while True:
         sample_no += 1
-        print(sample_no)
-        prob.solve()
-        
-        if qoi is 'testing':
-            samples.append(dummy)
-            dummy += 1.0
+        if display_progress:
+            print(sample_no)
             
-        elif qoi is 'integral':
-            # This is currently a bit of a hack, because there's a bug
-            # in complex firedrake.
-            V = prob.u_h.function_space()
-            func_real = fd.Function(V)
-            func_imag = fd.Function(V)
-            func_real.dat.data[:] = np.real(prob.u_h.dat.data)
-            func_imag.dat.data[:] = np.imag(prob.u_h.dat.data)
-            samples.append(fd.assemble(func_real * fd.dx) + 1j*fd.assemble(func_imag * fd.dx))
+        prob.solve()        
 
-        elif qoi is 'origin':
-            # This (experimentally) gives the value of the function at
-            # (0,0).
-            samples.append(prob.u_h.dat.data[0])
+        # Using 'set' below means we only tackle each qoi once.
+        for this_qoi in set(qois):
+
+            # This is a little hack that helps with testing
+            if this_qoi is 'testing':
+                prob_input = dummy
+            else:
+                prob_input = prob
+                
+            this_qoi_findings = qoi_finder(qois,this_qoi)
+            
+            if this_qoi_findings[0]:
+                for ii in this_qoi_findings[1]:
+                    samples[ii].append(qoi_eval(prob_input,this_qoi))       
 
         try:
             prob.sample()
+            # Next line is only for testing
+            dummy += 1.0
         # Get a SamplingError when there are no more realisations
         except SamplingError:
+            prob.n_stoch.reinitialise()
             break
 
-    return np.array(samples)
+    samples = [np.array(this_samples) for this_samples in samples]
+
+    return samples
+
+def qoi_finder(qois,this_qoi):
+    """Helper function that finds this_qoi in qois.
+
+    Parameters:
+
+    qois - list of strings
+
+    this_qoi - a string
+
+    Returns:
+
+    list, the entries of which are:
+
+    in_list - Boolean - True if this_qoi is an element of qois, False
+    otherwise.
+
+    indices- list of ints - the entries of qois that are this_qoi. Empty
+    list if in_list is False.
+
+    """
+    in_list = this_qoi in qois
+
+    indices = []
+    if in_list:
+        current_pos = 0
+        for ii in range(qois.count(this_qoi)):
+            this_index = qois.index(this_qoi,current_pos)
+            indices.append(this_index)
+            current_pos = this_index + 1
+
+    return [in_list,indices]
+
+def qoi_eval(prob,this_qoi):
+    """Helper function that evaluates qois.
+
+    prob - Helmholtz problem (or, for testing purposes only, a float)
+
+    this_qoi - string, one of ['testing','integral','origin']
+
+    output - the value of the qoi for this realisation of the
+    problem. None if this_qoi is not in the list above.
+
+    """
+    if this_qoi is 'testing':
+        output = prob
+
+    elif this_qoi is 'integral':
+        # This is currently a bit of a hack, because there's a bug
+        # in complex firedrake.
+        V = prob.u_h.function_space()
+        func_real = fd.Function(V)
+        func_imag = fd.Function(V)
+        func_real.dat.data[:] = np.real(prob.u_h.dat.data)
+        func_imag.dat.data[:] = np.imag(prob.u_h.dat.data)
+        output = fd.assemble(func_real * fd.dx) + 1j * fd.assemble(func_imag * fd.dx)
+        
+    elif this_qoi is 'origin':
+        # This (experimentally) gives the value of the function at
+        # (0,0).
+        output = prob.u_h.dat.data[0]
+
+    else:
+        output = None
+
+    return output
+        

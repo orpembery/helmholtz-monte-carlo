@@ -129,6 +129,9 @@ def investigate_error(k,h_spec,J,nu,M,
             error.append(this_error)
                         
     elif point_generation_method == 'qmc':
+
+        samples = []
+        
         approx = []
         
         error = []
@@ -137,7 +140,7 @@ def investigate_error(k,h_spec,J,nu,M,
                    
         for shift_no in range(nu):
             if display_progress:
-                print(shift_no+1)
+                print(shift_no+1,flush=True)
             # Randomly shift the points
             prob.n_stoch.change_all_points(
                 point_gen.shift(kl_mc_points,seed=shift_no))
@@ -155,6 +158,9 @@ def investigate_error(k,h_spec,J,nu,M,
             for ii in range(num_qois):
 
                 all_approximations[ii].append(this_samples[ii].mean())
+
+            # For outputting samples
+            samples.append(this_samples)
 
         all_approximations = [np.array(approximation) for approximation in all_approximations]
                 
@@ -174,7 +180,7 @@ def investigate_error(k,h_spec,J,nu,M,
     # utility function?)
     # TODO
     
-    return [k,approx,error]
+    return [k,samples]#[k,approx,error]
                     
 
 def all_qoi_samples(prob,qois,display_progress):
@@ -208,7 +214,7 @@ def all_qoi_samples(prob,qois,display_progress):
     while True:
         sample_no += 1
         if display_progress:
-            print(sample_no)
+            print(sample_no,flush=True)
             
         prob.solve()        
 

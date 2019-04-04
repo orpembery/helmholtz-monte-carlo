@@ -70,12 +70,15 @@ def investigate_error(k,h_spec,J,nu,M,
 
     Output:
 
-    results - list containing 3 items: [k,list of the approximations to
-    the mean of the qoi, list of estimates of the error in the
-    approximations].
+    results - list containing 2 items: [k,samples], where samples is a
+    list containing all of the samples of the QoI. If
+    point_generation_method is 'mc', then samples is a list of length nu
+    * (2**M), where each entry is a (complex-valued) float corresponding
+    to a sample of the QoI. If point_generation_method is 'qmc', then
+    samples is a list of length nu, where each entry of samples is a
+    list of length 2**M, each entry of which is as above.
 
     """
-    
     num_qois = len(qois)
     
     mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],
@@ -112,32 +115,35 @@ def investigate_error(k,h_spec,J,nu,M,
 
         samples = all_qoi_samples(prob,qois,display_progress)
         
-        approx = []
+        # approx = []
         
-        error = []
-        # Calculate the approximation
-        for ii in range(num_qois):
+        # error = []
+        # # Calculate the approximation
+        # for ii in range(num_qois):
 
-            this_approx = samples[ii].mean()
-            approx.append(this_approx)
+        #     this_approx = samples[ii].mean()
+        #     approx.append(this_approx)
                         
-            # Calculate the error - formula taken from
-            # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
-            # 230, pp. 3668-3694 (2011), equation (4.4)]
-            this_error = np.sqrt(((samples[ii] - this_approx)**2.0).sum()\
-            /(float(N)*float(N-1)))
-            error.append(this_error)
+        #     # Calculate the error - formula taken from
+        #     # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
+        #     # 230, pp. 3668-3694 (2011), equation (4.4)]
+        #     this_error = np.sqrt(((samples[ii] - this_approx)**2.0).sum()\
+        #     /(float(N)*float(N-1)))
+        #     error.append(this_error)
                         
     elif point_generation_method == 'qmc':
-        approx = []
-        
-        error = []
 
-        all_approximations = [[] for ii in range(num_qois)]
+        samples = []
+        
+        # approx = []
+        
+        # error = []
+
+        # all_approximations = [[] for ii in range(num_qois)]
                    
         for shift_no in range(nu):
             if display_progress:
-                print(shift_no+1)
+                print(shift_no+1,flush=True)
             # Randomly shift the points
             prob.n_stoch.change_all_points(
                 point_gen.shift(kl_mc_points,seed=shift_no))
@@ -146,26 +152,29 @@ def investigate_error(k,h_spec,J,nu,M,
             # Compute the approximation to the mean for
             # these shifted points
             
-            # For testing
-            if qois == ['testing_qmc']:
-                this_samples = [np.array(float(shift_no+1))]
-            elif qois == ['testing_qmc','testing_qmc']:
-                this_samples = [np.array(float(shift_no+1)),np.array(float(shift_no+1))]
+            # # For testing
+            # if qois == ['testing_qmc']:
+            #     this_samples = [np.array(float(shift_no+1))]
+            # elif qois == ['testing_qmc','testing_qmc']:
+            #     this_samples = [np.array(float(shift_no+1)),np.array(float(shift_no+1))]
                 
-            for ii in range(num_qois):
+            # for ii in range(num_qois):
 
-                all_approximations[ii].append(this_samples[ii].mean())
+            #     all_approximations[ii].append(this_samples[ii].mean())
 
-        all_approximations = [np.array(approximation) for approximation in all_approximations]
+            # For outputting samples
+            samples.append(this_samples)
+
+        # all_approximations = [np.array(approximation) for approximation in all_approximations]
                 
-        # Calculate the QMC approximations for each qoi
-        approx = [approximation.mean() for approximation in all_approximations]
+        # # Calculate the QMC approximations for each qoi
+        # approx = [approximation.mean() for approximation in all_approximations]
 
-        # Calculate the error for each qoi - formula taken from
-        # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
-        # 230, pp. 3668-3694 (2011), equation (4.6)]
-        error = [np.sqrt(((approx[ii]-all_approximations[ii])**2).sum()\
-                             /(float(nu)*(float(nu)-1.0))) for ii in range(num_qois)]
+        # # Calculate the error for each qoi - formula taken from
+        # # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
+        # # 230, pp. 3668-3694 (2011), equation (4.6)]
+        # error = [np.sqrt(((approx[ii]-all_approximations[ii])**2).sum()\
+        #                      /(float(nu)*(float(nu)-1.0))) for ii in range(num_qois)]
 
     # Save approximation and error in appropriate data frame
     # TODO
@@ -174,7 +183,7 @@ def investigate_error(k,h_spec,J,nu,M,
     # utility function?)
     # TODO
     
-    return [k,approx,error]
+    return [k,samples]#[k,approx,error]
                     
 
 def all_qoi_samples(prob,qois,display_progress):
@@ -208,7 +217,7 @@ def all_qoi_samples(prob,qois,display_progress):
     while True:
         sample_no += 1
         if display_progress:
-            print(sample_no)
+            print(sample_no,flush=True)
             
         prob.solve()        
 

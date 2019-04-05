@@ -8,7 +8,7 @@ import numpy as np
 
 def investigate_error(k,h_spec,J,nu,M,
                       point_generation_method,
-                      delta,lambda_mult,qois,dim=2,display_progress=False):
+                      delta,lambda_mult,qois,num_spatial_cores,dim=2,display_progress=False):
     """Investigates the error in Monte-Carlo methods for Helmholtz.
 
     Computes an approximation to the root-mean-squared error in
@@ -62,6 +62,10 @@ def investigate_error(k,h_spec,J,nu,M,
     There are also the options 'testing' and 'testing_qmc', but these
     are used solely for testing the functions.
 
+    num_spatial_cores - int - the number of cores we want to use to
+    solve our PDE. (You need to specify this as we might use ensemble
+    parallelism to speed things up.)
+
     dim - either 2 or 3 - the spatial dimension of the Helmholtz
     Problem.
 
@@ -69,25 +73,28 @@ def investigate_error(k,h_spec,J,nu,M,
     time we sample.
 
     Output:
-
+    # MC needs updating for multiple QOIs
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     results - list containing 2 items: [k,samples], where samples is a
     list containing all of the samples of the QoI. If
     point_generation_method is 'mc', then samples is a list of length nu
     * (2**M), where each entry is a (complex-valued) float corresponding
     to a sample of the QoI. If point_generation_method is 'qmc', then
     samples is a list of length nu, where each entry of samples is a
-    list of length 2**M, each entry of which is as above.
-
+    list of length num_qois, each entry of which is a numpy array of
+    length 2**M, each entry of which is as above.
     """
     num_qois = len(qois)
     
     mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],
                                               dim)
-
-    mesh = fd.UnitSquareMesh(mesh_points,mesh_points)
+    
+    ensemble = fd.Ensemble(fd.COMM_WORLD,num_spatial_cores)
+    
+    mesh = fd.UnitSquareMesh(mesh_points,mesh_points,comm=ensemble.comm)
         
     if point_generation_method is 'mc':
-
+        # This needs updating one I've figured out a way to do seeding in a parallel-appropriate way !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
         N = nu*(2**M)
         kl_mc_points = point_gen.mc_points(
             J,N,point_generation_method,seed=1)
@@ -95,7 +102,7 @@ def investigate_error(k,h_spec,J,nu,M,
     elif point_generation_method is 'qmc':
         N = 2**M
         kl_mc_points = point_gen.mc_points(
-            J,N,point_generation_method,seed=1)
+            J,N,point_generation_method,section=[ensemble.ensemble_comm.rank,ensemble.ensemble_comm.size],seed=1)
 
     n_0 = 1.0
                 
@@ -176,14 +183,29 @@ def investigate_error(k,h_spec,J,nu,M,
         # error = [np.sqrt(((approx[ii]-all_approximations[ii])**2).sum()\
         #                      /(float(nu)*(float(nu)-1.0))) for ii in range(num_qois)]
 
-    # Save approximation and error in appropriate data frame
-    # TODO
-
     # Save data frame to file with extra metadata (how? -
     # utility function?)
     # TODO
+
+    # Rank 0 receives from each other rank, in turn, and appends the right bits
+    comm = ensemble.ensemble_comm 
     
-    return [k,samples]#[k,approx,error]
+    if comm.rank == 0:
+        for ii in range(1,comm.size):
+            rec_samples = comm.recv(source=ii)
+            for shift_no in range(nu):
+                for qoi_no in range(num_qois):
+                    samples[shift_no][qoi_no] = np.hstack((samples[shift_no][qoi_no],rec_samples[shift_no][qoi_no]))
+    else:
+        comm.send(samples,dest=0)
+
+    if comm.rank == 0:
+        for ii in range(1,comm.size):
+            comm.send(samples,ii)
+    else:
+        samples = comm.recv(source=0)
+    
+    return [k,samples]
                     
 
 def all_qoi_samples(prob,qois,display_progress):

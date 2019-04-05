@@ -2,7 +2,7 @@ import numpy as np
 import latticeseq_b2
 from warnings import warn
 
-def mc_points(J,N,point_generation_method,seed=None):
+def mc_points(J,N,point_generation_method,section,seed=None):
         """Generates either Monte-Carlo or Quasi-Monte-Carlo integration
         points on the multi-dimensional [-1/2,1/2] cube.
 
@@ -18,6 +18,13 @@ def mc_points(J,N,point_generation_method,seed=None):
         QMC lattice rule is used to generate the points, whereas 'mc'
         means the points are randomly generated according to a uniform
         distribution on the unit cube.
+
+        section - list of length 2. The first argument says what
+        'section' of the QMC points to take (using zero-based indexing),
+        the second gives the total number of 'sections'. For example, if
+        section = [0,5], then the function will only output the first
+        1/5th of the QMC points. Used in ensemble parallelism. CURRENTLY
+        ONLY IMPLEMENTED FOR QMC POINTS.
 
         seed - seed with which to start the randomness for Monte-Carlo
         points. If seed is None, then no seed is set, and the underlying
@@ -52,11 +59,21 @@ def mc_points(J,N,point_generation_method,seed=None):
                 points = np.vstack((points,qmc_points[ii]))
 
         elif point_generation_method is 'mc':
-           set_numpy_seed(seed)
-           points = np.random.rand(N,J)
+            set_numpy_seed(seed)
+            points = np.random.rand(N,J)
 
         points -= 0.5
 
+        # pps = points per section
+        pps = len(points)//section[1]
+        
+        # Last section may have 'leftover' points
+        if section[0] == (section[1]-1):
+            points = points[section[0]*pps:,:]
+        
+        else:
+            points = points[(section[0]*pps):((section[0]+1)*pps),:]
+            
         return points
 
 def shift(points,seed=None):

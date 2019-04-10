@@ -187,23 +187,20 @@ def investigate_error(k,h_spec,J,nu,M,
     # utility function?)
     # TODO
 
-    # Rank 0 receives from each other rank, in turn, and appends the right bits
     comm = ensemble.ensemble_comm 
-    
+
+    # Despite the fact that there will be multiple procs with rank 0, I'm going to assume for now that this all works.
+    samples_tmp = comm.gather(samples,root=0)
+
+    #Whip it all into order
     if comm.rank == 0:
-        for ii in range(1,comm.size):
-            rec_samples = comm.recv(source=ii)
+        for ii in range(comm.size):
+            rec_samples = samples_tmp[ii]
             for shift_no in range(nu):
                 for qoi_no in range(num_qois):
                     samples[shift_no][qoi_no] = np.hstack((samples[shift_no][qoi_no],rec_samples[shift_no][qoi_no]))
-    else:
-        comm.send(samples,dest=0)
-
-    if comm.rank == 0:
-        for ii in range(1,comm.size):
-            comm.send(samples,ii)
-    else:
-        samples = comm.recv(source=0)
+    # Broadcast
+    samples = comm.bcast(samples,root=0)
     
     return [k,samples]
                     

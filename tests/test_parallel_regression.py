@@ -19,28 +19,30 @@ if __name__ == '__main__':
     # Just need to figure out how to actually run the thing in parallel
     # in pytest. Maybe do Firedrake recursive MPI hackery? (In conftest)
 
-    qmc_out = qmc_test()
+    for num_spatial_cores in [1,2]:
     
-    if fd.COMM_WORLD.rank == 0:
-        with open(serial_filename(),'rb') as f:
-            old_out = pickle.load(f)
+        qmc_out = qmc_test(num_spatial_cores)
 
-        assert qmc_out[0] == old_out[0] # should be a float
+        if fd.COMM_WORLD.rank == 0:
+            with open(serial_filename(),'rb') as f:
+                old_out = pickle.load(f)
 
-        assert len(qmc_out) == len(old_out)
-        
-        for ii in range(1,len(old_out)):
-            assert(len(old_out[ii])==len(qmc_out[ii]))
-            for jj in range(len(old_out[1])):
-                # For some reason, the sizes of these variables (in
-                # bytes) aren't always the same. I've no idea why.
-                # Hence, this assertion is commented out.
-                #assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
-                pass
+            assert qmc_out[0] == old_out[0] # should be a float
 
-        for ii in range(1,len(qmc_out)):
-            assert(len(old_out[ii])==len(qmc_out[ii]))
-            for jj in range(len(qmc_out[1])):
-                # Commented out here for same reason as above
-                #assert getsizeof(qmc_out[ii][jj]) == getsizeof(old_out[ii][jj]) 
-                assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
+            assert len(qmc_out) == len(old_out)
+
+            for ii in range(1,len(old_out)):
+                assert(len(old_out[ii])==len(qmc_out[ii]))
+                for jj in range(len(old_out[1])):
+                    # For some reason, the sizes of these variables (in
+                    # bytes) aren't always the same. I've no idea why.
+                    # Hence, this assertion is commented out.
+                    #assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
+                    pass
+
+            for ii in range(1,len(qmc_out)):
+                assert(len(old_out[ii])==len(qmc_out[ii]))
+                for jj in range(len(qmc_out[1])):
+                    # Commented out here for same reason as above
+                    #assert getsizeof(qmc_out[ii][jj]) == getsizeof(old_out[ii][jj]) 
+                    assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))

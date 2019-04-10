@@ -1,6 +1,6 @@
 from helmholtz_monte_carlo import error_analysis as err
 
-def qmc_test():
+def qmc_test(num_spatial_cores):
     """The test used to check parallelism is working correctly."""
     
     k = 5.0
@@ -19,7 +19,7 @@ def qmc_test():
 
     qois = ['integral','origin']
 
-    return err.investigate_error(k,h_spec,J,nu,M,'qmc',delta,lambda_mult,qois,num_spatial_cores=1,dim=2,display_progress=False)
+    return err.investigate_error(k,h_spec,J,nu,M,'qmc',delta,lambda_mult,qois,num_spatial_cores=num_spatial_cores,dim=2,display_progress=False)
 
 def serial_filename():
     """Filename serial code is saved as."""

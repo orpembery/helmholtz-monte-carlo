@@ -194,10 +194,10 @@ def investigate_error(k,h_spec,J,nu,M,
 
     #Whip it all into order
     if comm.rank == 0:
-        for ii in range(comm.size):
-            rec_samples = samples_tmp[ii]
-            for shift_no in range(nu):
-                for qoi_no in range(num_qois):
+        for shift_no in range(nu):
+            for qoi_no in range(num_qois):
+                for ii in range(1,comm.size):
+                    rec_samples = samples_tmp[ii]
                     samples[shift_no][qoi_no] = np.hstack((samples[shift_no][qoi_no],rec_samples[shift_no][qoi_no]))
     # Broadcast
     samples = comm.bcast(samples,root=0)

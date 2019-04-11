@@ -5,6 +5,7 @@ from helmholtz_firedrake.coefficients import SamplingError
 import helmholtz_monte_carlo.point_generation as point_gen
 import firedrake as fd
 import numpy as np
+import warnings
 
 def investigate_error(k,h_spec,J,nu,M,
                       point_generation_method,
@@ -84,6 +85,10 @@ def investigate_error(k,h_spec,J,nu,M,
     list of length num_qois, each entry of which is a numpy array of
     length 2**M, each entry of which is as above.
     """
+
+    if point_generation_method is 'mc':
+        warnings.warn("Monte Carlo sampling currently doesn't work",Warning)
+        
     num_qois = len(qois)
     
     mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],
@@ -154,8 +159,9 @@ def investigate_error(k,h_spec,J,nu,M,
             # Randomly shift the points
             prob.n_stoch.change_all_points(
                 point_gen.shift(kl_mc_points,seed=shift_no))
-
+            
             this_samples = all_qoi_samples(prob,qois,display_progress)
+
             # Compute the approximation to the mean for
             # these shifted points
             
@@ -188,7 +194,7 @@ def investigate_error(k,h_spec,J,nu,M,
     # TODO
 
     comm = ensemble.ensemble_comm 
-
+    
     # Despite the fact that there will be multiple procs with rank 0, I'm going to assume for now that this all works.
     samples_tmp = comm.gather(samples,root=0)
 

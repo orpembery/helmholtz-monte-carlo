@@ -89,9 +89,9 @@ def investigate_error(k,h_spec,J,nu,M,
     mesh_points = hh_utils.h_to_num_cells(h_spec[0]*k**h_spec[1],
                                               dim)
     
-    ensemble = fd.Ensemble(fd.COMM_WORLD,num_spatial_cores)
+    #ensemble = fd.Ensemble(fd.COMM_WORLD,num_spatial_cores)
     
-    mesh = fd.UnitSquareMesh(mesh_points,mesh_points,comm=ensemble.comm)
+    mesh = fd.UnitSquareMesh(mesh_points,mesh_points,comm=fd.COMM_WORLD)#ensemble.comm)
         
     if point_generation_method is 'mc':
         # This needs updating one I've figured out a way to do seeding in a parallel-appropriate way !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
@@ -101,8 +101,9 @@ def investigate_error(k,h_spec,J,nu,M,
 
     elif point_generation_method is 'qmc':
         N = 2**M
+        comm = fd.COMM_WORLD
         kl_mc_points = point_gen.mc_points(
-            J,N,point_generation_method,section=[ensemble.ensemble_comm.rank,ensemble.ensemble_comm.size],seed=1)
+            J,N,point_generation_method,section=[comm.rank,comm.size],seed=1)
 
     n_0 = 1.0
                 
@@ -121,23 +122,7 @@ def investigate_error(k,h_spec,J,nu,M,
     if point_generation_method is 'mc':
 
         samples = all_qoi_samples(prob,qois,display_progress)
-        
-        # approx = []
-        
-        # error = []
-        # # Calculate the approximation
-        # for ii in range(num_qois):
-
-        #     this_approx = samples[ii].mean()
-        #     approx.append(this_approx)
-                        
-        #     # Calculate the error - formula taken from
-        #     # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
-        #     # 230, pp. 3668-3694 (2011), equation (4.4)]
-        #     this_error = np.sqrt(((samples[ii] - this_approx)**2.0).sum()\
-        #     /(float(N)*float(N-1)))
-        #     error.append(this_error)
-                        
+      
     elif point_generation_method == 'qmc':
 
         samples = []
@@ -156,38 +141,13 @@ def investigate_error(k,h_spec,J,nu,M,
                 point_gen.shift(kl_mc_points,seed=shift_no))
 
             this_samples = all_qoi_samples(prob,qois,display_progress)
-            # Compute the approximation to the mean for
-            # these shifted points
-            
-            # # For testing
-            # if qois == ['testing_qmc']:
-            #     this_samples = [np.array(float(shift_no+1))]
-            # elif qois == ['testing_qmc','testing_qmc']:
-            #     this_samples = [np.array(float(shift_no+1)),np.array(float(shift_no+1))]
-                
-            # for ii in range(num_qois):
-
-            #     all_approximations[ii].append(this_samples[ii].mean())
-
+    
             # For outputting samples
             samples.append(this_samples)
 
-        # all_approximations = [np.array(approximation) for approximation in all_approximations]
-                
-        # # Calculate the QMC approximations for each qoi
-        # approx = [approximation.mean() for approximation in all_approximations]
+        
 
-        # # Calculate the error for each qoi - formula taken from
-        # # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
-        # # 230, pp. 3668-3694 (2011), equation (4.6)]
-        # error = [np.sqrt(((approx[ii]-all_approximations[ii])**2).sum()\
-        #                      /(float(nu)*(float(nu)-1.0))) for ii in range(num_qois)]
-
-    # Save data frame to file with extra metadata (how? -
-    # utility function?)
-    # TODO
-
-    comm = ensemble.ensemble_comm 
+    comm = fd.COMM_WORLD#ensemble.ensemble_comm 
 
     # Despite the fact that there will be multiple procs with rank 0, I'm going to assume for now that this all works.
     samples_tmp = comm.gather(samples,root=0)

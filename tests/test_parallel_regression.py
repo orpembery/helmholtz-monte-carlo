@@ -19,30 +19,39 @@ if __name__ == '__main__':
     # Just need to figure out how to actually run the thing in parallel
     # in pytest. Maybe do Firedrake recursive MPI hackery? (In conftest)
 
-    for num_spatial_cores in [1,2]:
+    for num_spatial_cores in range(1,fd.COMM_WORLD.size+1):
+
+        if fd.COMM_WORLD.size % num_spatial_cores == 0:
     
-        qmc_out = qmc_test(num_spatial_cores)
+            qmc_out = qmc_test(num_spatial_cores)
 
-        if fd.COMM_WORLD.rank == 0:
-            with open(serial_filename(),'rb') as f:
-                old_out = pickle.load(f)
+            if fd.COMM_WORLD.rank == 0:
+                with open(serial_filename(),'rb') as f:
+                    old_out = pickle.load(f)
 
-            assert qmc_out[0] == old_out[0] # should be a float
+                assert qmc_out[0] == old_out[0] # should be a float
 
-            assert len(qmc_out) == len(old_out)
+                assert len(qmc_out) == len(old_out)
 
-            for ii in range(1,len(old_out)):
-                assert(len(old_out[ii])==len(qmc_out[ii]))
-                for jj in range(len(old_out[1])):
-                    # For some reason, the sizes of these variables (in
-                    # bytes) aren't always the same. I've no idea why.
-                    # Hence, this assertion is commented out.
-                    #assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
-                    pass
+                for ii in range(1,len(old_out)):
+                    assert(len(old_out[ii])==len(qmc_out[ii]))
+                    for jj in range(len(old_out[1])):
+                        # For some reason, the sizes of these variables (in
+                        # bytes) aren't always the same. I've no idea why.
+                        # Hence, this assertion is commented out.
+                        #assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
+                        pass
 
-            for ii in range(1,len(qmc_out)):
-                assert(len(old_out[ii])==len(qmc_out[ii]))
-                for jj in range(len(qmc_out[1])):
-                    # Commented out here for same reason as above
-                    #assert getsizeof(qmc_out[ii][jj]) == getsizeof(old_out[ii][jj]) 
-                    assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
+                for ii in range(1,len(qmc_out)):
+                    assert(len(old_out[ii])==len(qmc_out[ii]))
+                    for jj in range(len(qmc_out[1])):
+                        # Commented out here for same reason as above
+                        #assert getsizeof(qmc_out[ii][jj]) == getsizeof(old_out[ii][jj]) 
+                        #assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
+                        if not np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj])):
+                            print('num_spatial_cores '+str(num_spatial_cores))
+                            print('ii '+str(ii))
+                            print('jj '+str(jj))
+                            print(qmc_out[ii][jj])
+                            print(old_out[ii][jj])
+                            assert False

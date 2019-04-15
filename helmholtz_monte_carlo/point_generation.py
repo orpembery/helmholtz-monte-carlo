@@ -1,6 +1,7 @@
 import numpy as np
 import latticeseq_b2
 from warnings import warn
+from copy import deepcopy
 
 def mc_points(J,N,point_generation_method,section,seed=None):
         """Generates either Monte-Carlo or Quasi-Monte-Carlo integration
@@ -80,6 +81,8 @@ def shift(points,seed=None):
     """Applies a random shift to points, 'wrapping them around' the
     unit cube if needed."""
 
+    points = deepcopy(points)
+    
     J = points.shape[1]
 
     set_numpy_seed(seed)

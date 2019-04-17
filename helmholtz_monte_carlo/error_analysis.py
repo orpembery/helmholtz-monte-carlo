@@ -97,6 +97,8 @@ def investigate_error(k,h_spec,J,nu,M,
     ensemble = fd.Ensemble(fd.COMM_WORLD,num_spatial_cores)
     
     mesh = fd.UnitSquareMesh(mesh_points,mesh_points,comm=ensemble.comm)
+
+    comm = ensemble.ensemble_comm 
         
     if point_generation_method is 'mc':
         # This needs updating one I've figured out a way to do seeding in a parallel-appropriate way !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
@@ -107,8 +109,8 @@ def investigate_error(k,h_spec,J,nu,M,
     elif point_generation_method is 'qmc':
         N = 2**M
         kl_mc_points = point_gen.mc_points(
-            J,N,point_generation_method,section=[ensemble.ensemble_comm.rank,ensemble.ensemble_comm.size],seed=1)
-
+            J,N,point_generation_method,section=[comm.rank,comm.size],seed=1)
+        
     n_0 = 1.0
                 
     kl_like = coeff.UniformKLLikeCoeff(
@@ -125,7 +127,7 @@ def investigate_error(k,h_spec,J,nu,M,
                 
     if point_generation_method is 'mc':
 
-        samples = all_qoi_samples(prob,qois,display_progress)
+        samples = all_qoi_samples(prob,qois,ensemble.comm,display_progress)
         
         # approx = []
         
@@ -159,8 +161,9 @@ def investigate_error(k,h_spec,J,nu,M,
             # Randomly shift the points
             prob.n_stoch.change_all_points(
                 point_gen.shift(kl_mc_points,seed=shift_no))
-            
-            this_samples = all_qoi_samples(prob,qois,display_progress)
+
+            this_samples = all_qoi_samples(prob,qois,ensemble.comm,display_progress)
+
 
             # Compute the approximation to the mean for
             # these shifted points
@@ -194,10 +197,10 @@ def investigate_error(k,h_spec,J,nu,M,
     # TODO
 
     comm = ensemble.ensemble_comm 
-    
+
     # Despite the fact that there will be multiple procs with rank 0, I'm going to assume for now that this all works.
     samples_tmp = comm.gather(samples,root=0)
-
+    
     #Whip it all into order
     if comm.rank == 0:
         for shift_no in range(nu):
@@ -207,11 +210,11 @@ def investigate_error(k,h_spec,J,nu,M,
                     samples[shift_no][qoi_no] = np.hstack((samples[shift_no][qoi_no],rec_samples[shift_no][qoi_no]))
     # Broadcast
     samples = comm.bcast(samples,root=0)
-    
+
     return [k,samples]
                     
 
-def all_qoi_samples(prob,qois,display_progress):
+def all_qoi_samples(prob,qois,comm,display_progress):
     """Computes all samples of the qoi for a StochasticHelmholtzProblem.
 
     This is a helper function for investigate_error.
@@ -221,6 +224,8 @@ def all_qoi_samples(prob,qois,display_progress):
     prob - a StochasticHelmholtzProblem
 
     qois - list of some of the qois allowed in investigate_error.
+
+    comm - the communicator for spatial parallelism.
 
     display_progress - boolean - if true, prints the sample number each
     time we sample.
@@ -244,10 +249,10 @@ def all_qoi_samples(prob,qois,display_progress):
         if display_progress:
             print(sample_no,flush=True)
             
-        prob.solve()        
+        prob.solve()
 
         # Using 'set' below means we only tackle each qoi once.
-        for this_qoi in set(qois):
+        for this_qoi in sorted(set(qois)):
 
             # This is a little hack that helps with testing
             if this_qoi is 'testing':
@@ -259,7 +264,8 @@ def all_qoi_samples(prob,qois,display_progress):
             
             if this_qoi_findings[0]:
                 for ii in this_qoi_findings[1]:
-                    samples[ii].append(qoi_eval(prob_input,this_qoi))       
+                    samples[ii].append(qoi_eval(prob_input,this_qoi,comm))
+
 
         try:
             prob.sample()
@@ -306,12 +312,14 @@ def qoi_finder(qois,this_qoi):
 
     return [in_list,indices]
 
-def qoi_eval(prob,this_qoi):
+def qoi_eval(prob,this_qoi,comm):
     """Helper function that evaluates qois.
 
     prob - Helmholtz problem (or, for testing purposes only, a float)
 
     this_qoi - string, one of ['testing','integral','origin']
+
+    comm - the communicator for spatial parallelism.
 
     output - the value of the qoi for this realisation of the
     problem. None if this_qoi is not in the list above.
@@ -323,6 +331,7 @@ def qoi_eval(prob,this_qoi):
     elif this_qoi is 'integral':
         # This is currently a bit of a hack, because there's a bug
         # in complex firedrake.
+        # It's also non-obvious why this works in parallel....
         V = prob.u_h.function_space()
         func_real = fd.Function(V)
         func_imag = fd.Function(V)
@@ -331,12 +340,65 @@ def qoi_eval(prob,this_qoi):
         output = fd.assemble(func_real * fd.dx) + 1j * fd.assemble(func_imag * fd.dx)
         
     elif this_qoi is 'origin':
-        # This (experimentally) gives the value of the function at
-        # (0,0).
-        output = prob.u_h.dat.data[0]
-
+        # This gives the value of the function at (0,0).
+        output = eval_at_mesh_point(prob.u_h,np.array([0.0,0.0]),comm)
     else:
         output = None
 
     return output
         
+def eval_at_mesh_point(v,point,comm):
+    """Evaluates a Function at a point on the mesh. Only tested for
+    1st-order CG elements.
+
+    Parameters:
+
+    v - a Firedrake function
+
+    point - a tuple of the correct length, giving the coordinates of the
+    mesh point at which we evaluate.
+
+    comm - the communicator for spatial parallelism.
+    """
+
+    mesh = v.function_space().mesh()
+        
+    location_in_list = []
+    
+    # In each dimension, find out which mesh points match the ith
+    # coordinate of our desired point.
+    for ii in range(len(point)):
+
+        coords = mesh.coordinates.sub(ii).vector().dat.data_ro
+
+        location_in_list.append(coords==point[ii])
+
+    # Do an 'and' across all the dimensions to find the index of our
+    # point
+    loc_2d = [ location_in_list[0][jj] and location_in_list[1][jj] for jj in range(len(location_in_list[0]))]
+
+    if len(location_in_list) == 3:
+
+        loc = [ loc_2d[jj] and location_in_list[2][jj] for jj in range(len(location_in_list[2]))]
+
+    else:
+        loc = loc_2d
+
+    # Get the value of the point (only happens on one proc) and
+    # broadcast it (hackily) to all the other procs.
+    
+    value = v.vector().dat.data_ro[loc]
+
+    rank = comm.rank    
+
+    if len(value) == 1:
+        bcast_rank = rank
+    else:
+        bcast_rank = None
+    
+    bcast_rank = comm.allgather(bcast_rank)
+
+    bcast_rank = np.array(bcast_rank)[[ii != None for ii in bcast_rank]][0]
+
+    return comm.bcast(value,root=bcast_rank)[0]
+

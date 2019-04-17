@@ -317,7 +317,6 @@ def qoi_eval(prob,this_qoi,comm):
     problem. None if this_qoi is not in the list above.
 
     """
-    print(str(fd.COMM_WORLD.rank) + ' entered qoi_eval, qoi is ' + this_qoi,flush=True)
     if this_qoi is 'testing':
         output = prob
 
@@ -334,12 +333,7 @@ def qoi_eval(prob,this_qoi,comm):
         
     elif this_qoi is 'origin':
         # This gives the value of the function at (0,0).
-        #print(str(fd.COMM_WORLD.size) + ' ' + str(comm.size) + ' ' + 'entering eval',flush=True)
-        #import time
-        #print(str(fd.COMM_WORLD.rank) + ' ' + str(time.clock()),flush=True)
-        print(str(fd.COMM_WORLD.rank) + ' ' + 'about to enter eval_at_mesh_point',flush=True)
         output = eval_at_mesh_point(prob.u_h,np.array([0.0,0.0]),comm)
-        #print(str(fd.COMM_WORLD.size) + ' ' + str(comm.size) + ' ' + 'exited eval',flush=True)
     else:
         output = None
 
@@ -386,28 +380,15 @@ def eval_at_mesh_point(v,point,comm):
     # broadcast it (hackily) to all the other procs.
     
     value = v.vector().dat.data_ro[loc]
-    #print(str(fd.COMM_WORLD.rank) + ' entered eval_at_mesh_point',flush=True)
-    rank = comm.rank
 
-    #if rank == 1:
-    #    bcast_rank = 0
-    #else:
-    #    bcast_rank = None
-        
-    #foo = comm.bcast(bcast_rank,root=1) # This doesn't hang
-    #print(str(fd.COMM_WORLD.rank) + ' pre gather',flush=True)
-    #foo = comm.gather(bcast_rank,root=0)
-
-    
+    rank = comm.rank    
 
     if len(value) == 1:
         bcast_rank = rank
     else:
         bcast_rank = None
     
-    bcast_rank = comm.allgather(bcast_rank) # This causes hanging, I've no idea why....
-    print(str(fd.COMM_WORLD.rank) + ' post gather',flush=True)
-
+    bcast_rank = comm.allgather(bcast_rank)
 
     bcast_rank = np.array(bcast_rank)[[ii != None for ii in bcast_rank]][0]
 

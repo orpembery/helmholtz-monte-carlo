@@ -5,6 +5,10 @@ import firedrake as fd
 import numpy as np
 #from sys import getsizeof
 #def test_parallel_regression(): # Change this when I know how to run it in a pytest framework
+
+from firedrake_complex_hacks import balena_hacks
+
+
 if __name__ == '__main__':
     """Tests that parallel code outputs the same as (older) serial code.
 
@@ -18,6 +22,8 @@ if __name__ == '__main__':
 
     # Just need to figure out how to actually run the thing in parallel
     # in pytest. Maybe do Firedrake recursive MPI hackery? (In conftest)
+
+    balena_hacks.fix_mesh_generation_time()
 
     overall_size = fd.COMM_WORLD.size
     

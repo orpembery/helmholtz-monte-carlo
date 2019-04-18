@@ -8,7 +8,6 @@ from helmholtz_firedrake import coefficients as coeff
 from helmholtz_firedrake import utils
 import pytest
 
-@pytest.mark.xfail
 def test_mc_points_correct():
     """Tests that Monte Carlo points are in the (centred) unit cube.
 
@@ -19,14 +18,15 @@ def test_mc_points_correct():
     N = 1024
     point_generation_method = 'mc'
     seed = 42
-    points = point_gen.mc_points(J,N,point_generation_method,seed)
+    section = [0,1]
+    points = point_gen.mc_points(J,N,point_generation_method,section,seed)
     assert (-0.5 <= points).all() and (points <= 0.5).all()
 
     # The following is a 'quick and dirty' check that the points are
     # random - whether their average is near the centre of the cube. The
     # threshold for 'near' is a heuristic that I chose by looking at
     # generated random numbers.
-    assert np.abs(points.mean()) < 0.0025
+    assert np.isclose(points.mean(),0.0,atol=0.0025)
 
     
 def test_qmc_points_correct():
@@ -114,7 +114,9 @@ def test_all_qoi_samples():
 
     prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
 
-    prob.f_g_plane_wave()
+    angle = 2.0*np.pi/3.0
+    
+    prob.f_g_plane_wave([np.cos(angle),np.sin(angle)])
 
     prob.use_mumps()
 
@@ -123,7 +125,7 @@ def test_all_qoi_samples():
     assert np.allclose(samples[0],np.arange(1.0,float(num_points)+1.0))
 
 @pytest.mark.xfail
-def test_mc_calculation():
+def test_mc_sample_generation():
     k = 1.0
 
     h_spec = (1.0,-1.5)
@@ -140,11 +142,13 @@ def test_mc_calculation():
 
     lambda_mult = 1.0
 
+    num_spatial_cores = 1
+
     qois = ['testing']
 
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                           point_generation_method,
-                                          delta,lambda_mult,qois,dim=2)
+                                          delta,lambda_mult,qois,num_spatial_cores,dim=2)
 
     N = float(nu*2**M)
     
@@ -153,10 +157,9 @@ def test_mc_calculation():
     assert np.isclose(output[2],np.sqrt((N+1.0)/12.0))
     
 
-# We now calculate the errors elsewhere - need to write tests for them!
-# This test is probably redundant
-@pytest.mark.xfail
-def test_qmc_calculation():
+def test_qmc_sample_generation():
+    """Tests that all the anscillary code (apart from actually calculating
+the qois) for qmc points happens in an expected way."""
     k = 1.0
 
     h_spec = (1.0,-1.5)
@@ -173,7 +176,7 @@ def test_qmc_calculation():
 
     lambda_mult = 1.0
 
-    qois = ['testing_qmc']
+    qois = ['testing']
 
     num_spatial_cores = 1
 
@@ -181,130 +184,13 @@ def test_qmc_calculation():
                                           point_generation_method,
                                           delta,lambda_mult,qois,
                                           num_spatial_cores,dim=2)
-    
-    assert np.isclose(output[1],(float(nu)+1.0)/2.0)
-    
-    assert np.isclose(output[2],np.sqrt((float(nu)+1.0)/12.0))
 
-@pytest.mark.xfail
-def test_qoi_samples_integral():
-    """Checks that the correct qoi is calculated for a plane wave.
+    for shift_no in range(nu):
+        assert np.allclose(output[1][shift_no][0],[float(ii) for ii in range(1,2**M + 1)])
 
-    Qoi is the integral of the function over the domain.
-    """
 
-    dim = 2
-    
-    k = 20.0
-
-    num_points = utils.h_to_num_cells(k**-1.5,dim)
-    
-    mesh = fd.UnitSquareMesh(num_points,num_points,comm=fd.COMM_WORLD)
-
-    J = 1
-
-    delta = 2.0
-
-    lambda_mult = 1.0
-
-    n_0 = 1.0
-
-    num_points = 1
-
-    stochastic_points = np.zeros((num_points,J))
-    
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
-    
-    V = fd.FunctionSpace(mesh,"CG",1)
-
-    prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
-
-    d_list = [np.cos(np.pi/16.0),np.sin(np.pi/4.0)]
-    #This test fails for most wave directions. See
-    #the below integral test for more discussion.
-
-    d = fd.as_vector(d_list)
-    prob.f_g_plane_wave()
-
-    prob.use_mumps()
-
-    samples = gen_samples.all_qoi_samples(prob,['integral'],fd.COMM_WORLD,False)
-
-    # Should be just one sample
-    assert samples[0].shape[0] == 1
-
-    true_integral = plane_wave_integral(d_list,k,dim)
-    
-    # This should be the integral over the unit square/cube of a plane
-    # wave I've tweaked the definition of 'closeness' as there's
-    # obviously some FEM error coming in here. But working on a finer
-    # mesh, you see that the computed value approaches the true integral
-    # (I've only run it for a plane wave incident from the bottom-left
-    # corner), so I'm confident this is computing the correct value,
-    # modulo FEM error.  The value of rtol has been chosen by looking at
-    # the error for a plane wave incident from the bottom left (d =
-    # [1/sqrt(2),1/sqrt(2)]), and choosing rtol so that test
-    # passes. However, the actual test above is run with a different
-    # incident plane wave.
-    assert np.isclose(samples[0],true_integral,atol=1e-16,rtol=1e-2)
-
-def test_qoi_samples_origin():
-    """Checks that the correct qoi is calculated for a plane wave.
-
-    Qoi is the value of the function at the origin.
-    """
-
-    dim = 2
-    
-    k = 20.0
-
-    num_points = utils.h_to_num_cells(k**-1.5,dim)
-    
-    mesh = fd.UnitSquareMesh(num_points,num_points,comm=fd.COMM_WORLD)
-
-    J = 1
-
-    delta = 2.0
-
-    lambda_mult = 1.0
-
-    n_0 = 1.0
-
-    num_points = 1
-
-    stochastic_points = np.zeros((num_points,J))
-    
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
-    
-    V = fd.FunctionSpace(mesh,"CG",1)
-
-    prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
-
-    d_list = [np.cos(np.pi/8.0),np.sin(np.pi/8.0)]
-
-    d = fd.as_vector(d_list)
-    prob.f_g_plane_wave()
-
-    prob.use_mumps()
-
-    samples = gen_samples.all_qoi_samples(prob,['origin'],fd.COMM_WORLD,False)
-
-    # Should be just one sample
-    assert samples[0].shape[0] == 1
-
-    true_value = 1.0
-    
-    print(true_value)
-
-    print(samples[0])
-    # Tolerances values were ascertained to work for a different wave
-    # direction. They're also the same as those in the test above.
-    assert np.isclose(samples[0],true_value,atol=1e-16,rtol=1e-2)
-
-# As above, this test probably irrelevant now
-@pytest.mark.xfail
 def test_multiple_qois_qmc():
-    """Checks that multiple qois are calculated correctly for QMC."""
+    """Checks that anscillary code with multiple qois works for QMC."""
 
     k = 1.0
 
@@ -326,23 +212,22 @@ def test_multiple_qois_qmc():
     num_spatial_cores = 1
     
     # This is just testing that we correctly handle multiple qois
-    qois = ['testing_qmc','testing_qmc']
+    qois = ['testing','testing']
     
 
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                       point_generation_method,
                                       delta,lambda_mult,qois,
                                       num_spatial_cores,dim=2)
-   
+
     # First qoi
-    assert np.isclose(output[1][0],(float(nu)+1.0)/2.0)
-    
-    assert np.isclose(output[2][0],np.sqrt((float(nu)+1.0)/12.0))
-    
+    for shift_no in range(nu):
+        assert np.allclose(output[1][shift_no][0],[float(ii) for ii in range(1,2**M + 1)])
+
     # Second qoi
-    assert np.isclose(output[1][1],(float(nu)+1.0)/2.0)
-    
-    assert np.isclose(output[2][1],np.sqrt((float(nu)+1.0)/12.0))
+    for shift_no in range(nu):
+        assert np.allclose(output[1][shift_no][1],[float(ii) for ii in range(1,2**M + 1)])
+
 
 @pytest.mark.xfail
 def test_multiple_qois_mc():
@@ -434,192 +319,3 @@ def test_qoi_finder():
     assert not output[0]
 
     assert output[1] == []
-
-# I have no idea why this test doesn't work
-@pytest.mark.xfail
-def test_qoi_eval_integral():
-    """Tests that qois are evaluated correctly."""
-
-    # Set up plane wave
-    dim = 2
-    
-    k = 20.0
-
-    num_points = utils.h_to_num_cells(k**-1.5,dim)
-    
-    mesh = fd.UnitSquareMesh(num_points,num_points)
-
-    J = 1
-
-    delta = 2.0
-
-    lambda_mult = 1.0
-
-    n_0 = 1.0
-
-    num_points = 1
-
-    stochastic_points = np.zeros((num_points,J))
-    
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
-    
-    V = fd.FunctionSpace(mesh,"CG",1)
-
-    prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
-    d_list = [np.cos(2.0*np.pi/3.0),np.sin(2.0*np.pi/3.0)]
-    #d_list = [np.cos(np.pi/16.0),np.sin(np.pi/16.0)]
-    # If d_list is changed to anything other than
-    # [np.cos(np.pi/4.0),np.sin(np.pi/4.0)]; I've tried
-    # [np.cos(2.0*np.pi/7.0),np.sin(2.0*np.pi/7.0)],
-    # [np.cos(np.pi/3.0),np.sin(np.pi/3.0)], and the above, then the
-    # tests fail, and don't appear to converge as you refine the mesh. I
-    # don't know why. Maybe the true solution for the qoi is wrong?
-
-    d = fd.as_vector(d_list)
-    prob.f_g_plane_wave()
-
-    prob.use_mumps()
-
-    prob.solve()
-
-    # For the integral of the solution
-    output = gen_samples.qoi_eval(prob,'integral')
-    
-
-    true_integral = plane_wave_integral(d_list,k,dim)
-    
-    # This should be the integral over the unit square/cube of a plane
-    # wave I've tweaked the definition of 'closeness' as there's
-    # obviously some FEM error coming in here. But working on a finer
-    # mesh, you see that the computed value approaches the true integral
-    # (I've only run it for a plane wave incident from the bottom-left
-    # corner), so I'm confident this is computing the correct value,
-    # modulo FEM error.  The value of rtol has been chosen by looking at
-    # the error for a plane wave incident from the bottom left (d =
-    # [1/sqrt(2),1/sqrt(2)]), and choosing rtol so that test
-    # passes. However, the actual test above is run with a different
-    # incident plane wave.
-    print(output)
-    assert np.isclose(output,true_integral,atol=1e-16,rtol=1e-2)
-
-    
-    
-def test_qoi_eval_origin():
-    """Tests that qois are evaluated correctly."""
-
-    # Set up plane wave
-    dim = 2
-    
-    k = 20.0
-
-    num_points = utils.h_to_num_cells(k**-1.5,dim) # changed here
-    
-    mesh = fd.UnitSquareMesh(num_points,num_points)
-
-    J = 1
-
-    delta = 2.0
-
-    lambda_mult = 1.0
-
-    n_0 = 1.0
-
-    num_points = 1
-
-    stochastic_points = np.zeros((num_points,J))
-    
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
-    
-    V = fd.FunctionSpace(mesh,"CG",1)
-
-    prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
-
-    d_list = [np.cos(2.0*np.pi/9.0),np.sin(2.0*np.pi/9.0)]
-
-    d = fd.as_vector(d_list)
-    prob.f_g_plane_wave()
-
-    prob.use_mumps()
-
-    prob.solve()
-
-    # For the value of the solution at the origin:
-    output = gen_samples.qoi_eval(prob,'origin',comm=fd.COMM_WORLD)
-    # Tolerances values were ascertained to work for a different wave
-    # direction. They're also the same as those in the test above.
-    true_value = 1.0 + 0.0 * 1j
-    assert np.isclose(output,true_value,atol=1e-16,rtol=1e-2)
-    
-
-    
-def test_qoi_eval_dummy():
-    """Tests that qois are evaluated correctly."""
-
-    # Set up plane wave
-    dim = 2
-    
-    k = 20.0
-
-    num_points = utils.h_to_num_cells(k**-1.5,dim) # changed here
-    
-    mesh = fd.UnitSquareMesh(num_points,num_points,comm=fd.COMM_WORLD)
-
-    J = 1
-
-    delta = 2.0
-
-    lambda_mult = 1.0
-
-    n_0 = 1.0
-
-    num_points = 1
-
-    stochastic_points = np.zeros((num_points,J))
-    
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
-    
-    V = fd.FunctionSpace(mesh,"CG",1)
-
-    prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
-
-    d_list = [np.cos(np.pi/8.0),np.sin(np.pi/8.0)]
-    # If d_list is changed to
-    # [np.cos(2.0*np.pi/7.0),np.sin(2.0*np.pi/7.0)] or
-    # [np.cos(np.pi/3.0),np.sin(np.pi/3.0)], then the tests fail, and
-    # don't appear to converge as you refine the mesh. I don't know
-    # why. Maybe the true solution for the qoi is wrong?
-
-    d = fd.as_vector(d_list)
-    prob.f_g_plane_wave()
-
-    prob.use_mumps()
-
-    prob.solve()
-
-    # For the dummy we use for testing:
-    this_dummy = 4.0
-    output = gen_samples.qoi_eval(this_dummy,'testing',comm=fd.COMM_WORLD)
-
-    assert np.isclose(output,this_dummy)
-
-def plane_wave_integral(d_list,k,dim):
-    """Helper function.
-
-    Calculates the exact integral of a plane wave on the unit square.
-
-    d_list - list of floats - list giving the wave direction
-
-    dim - int - the spatial dimension
-
-    k - float - the wavenumber
-
-    output - float - the integral over the square.
-    """
-    d_calc = np.array(d_list)
-
-    d_prod = d_calc.prod()
-
-    integral_1 = (-1j/(k*d_prod))**dim
-    integral_2 = (1 + np.exp(1j * k * d_calc)).prod()
-
-    return integral_1 * integral_2

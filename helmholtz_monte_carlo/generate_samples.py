@@ -121,7 +121,9 @@ def generate_samples(k,h_spec,J,nu,M,
     prob = hh.StochasticHelmholtzProblem(
         k,V,A_stoch=None,n_stoch=kl_like)
 
-    prob.f_g_plane_wave()
+    angle = np.pi/4.0
+    
+    prob.f_g_plane_wave([np.cos(angle),np.sin(angle)])
 
     prob.use_mumps()
                 

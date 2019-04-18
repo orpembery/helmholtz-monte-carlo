@@ -35,7 +35,6 @@ def mc_points(J,N,point_generation_method,section,seed=None):
 
         points - N x J numpy array, where each row is the coordinates
         of an integration point.
-
         """
         if point_generation_method is 'qmc':
 

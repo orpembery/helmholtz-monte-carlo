@@ -74,8 +74,7 @@ def generate_samples(k,h_spec,J,nu,M,
     time we sample.
 
     Output:
-    # MC needs updating for multiple QOIs
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    Warning: MC needs updating for multiple QOIs
     results - list containing 2 items: [k,samples], where samples is a
     list containing all of the samples of the QoI. If
     point_generation_method is 'mc', then samples is a list of length

@@ -16,7 +16,6 @@ def mean_and_error(mc_output,point_generation_method):
 
     list of length 2, [approx,error], where error is as in Kuo, et al
     (see below).
-
     """
 
     samples = mc_output[1]

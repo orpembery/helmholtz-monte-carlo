@@ -8,7 +8,6 @@ from helmholtz_firedrake import coefficients as coeff
 from helmholtz_firedrake import utils
 import pytest
 
-@pytest.mark.xfail
 def test_mc_points_correct():
     """Tests that Monte Carlo points are in the (centred) unit cube.
 
@@ -19,14 +18,15 @@ def test_mc_points_correct():
     N = 1024
     point_generation_method = 'mc'
     seed = 42
-    points = point_gen.mc_points(J,N,point_generation_method,seed)
+    section = [0,1]
+    points = point_gen.mc_points(J,N,point_generation_method,section,seed)
     assert (-0.5 <= points).all() and (points <= 0.5).all()
 
     # The following is a 'quick and dirty' check that the points are
     # random - whether their average is near the centre of the cube. The
     # threshold for 'near' is a heuristic that I chose by looking at
     # generated random numbers.
-    assert np.abs(points.mean()) < 0.0025
+    assert np.isclose(points.mean(),0.0,atol=0.0025)
 
     
 def test_qmc_points_correct():
@@ -123,7 +123,7 @@ def test_all_qoi_samples():
     assert np.allclose(samples[0],np.arange(1.0,float(num_points)+1.0))
 
 @pytest.mark.xfail
-def test_mc_calculation():
+def test_mc_sample_generation():
     k = 1.0
 
     h_spec = (1.0,-1.5)
@@ -140,11 +140,13 @@ def test_mc_calculation():
 
     lambda_mult = 1.0
 
+    num_spatial_cores = 1
+
     qois = ['testing']
 
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                           point_generation_method,
-                                          delta,lambda_mult,qois,dim=2)
+                                          delta,lambda_mult,qois,num_spatial_cores,dim=2)
 
     N = float(nu*2**M)
     
@@ -153,10 +155,9 @@ def test_mc_calculation():
     assert np.isclose(output[2],np.sqrt((N+1.0)/12.0))
     
 
-# We now calculate the errors elsewhere - need to write tests for them!
-# This test is probably redundant
-@pytest.mark.xfail
-def test_qmc_calculation():
+def test_qmc_sample_generation():
+    """Tests that all the anscillary code (apart from actually calculating
+the qois) for qmc points happens in an expected way."""
     k = 1.0
 
     h_spec = (1.0,-1.5)
@@ -173,7 +174,7 @@ def test_qmc_calculation():
 
     lambda_mult = 1.0
 
-    qois = ['testing_qmc']
+    qois = ['testing']
 
     num_spatial_cores = 1
 
@@ -181,12 +182,13 @@ def test_qmc_calculation():
                                           point_generation_method,
                                           delta,lambda_mult,qois,
                                           num_spatial_cores,dim=2)
-    
-    assert np.isclose(output[1],(float(nu)+1.0)/2.0)
-    
-    assert np.isclose(output[2],np.sqrt((float(nu)+1.0)/12.0))
+
+    for shift_no in range(nu):
+        assert np.allclose(output[1][shift_no][0],[float(ii) for ii in range(1,2**M + 1)])
+
 
 @pytest.mark.xfail
+# What is this test stesting, that the evaluation test below isn't?
 def test_qoi_samples_integral():
     """Checks that the correct qoi is calculated for a plane wave.
 
@@ -301,10 +303,9 @@ def test_qoi_samples_origin():
     # direction. They're also the same as those in the test above.
     assert np.isclose(samples[0],true_value,atol=1e-16,rtol=1e-2)
 
-# As above, this test probably irrelevant now
-@pytest.mark.xfail
+
 def test_multiple_qois_qmc():
-    """Checks that multiple qois are calculated correctly for QMC."""
+    """Checks that anscillary code with multiple qois works for QMC."""
 
     k = 1.0
 
@@ -326,23 +327,22 @@ def test_multiple_qois_qmc():
     num_spatial_cores = 1
     
     # This is just testing that we correctly handle multiple qois
-    qois = ['testing_qmc','testing_qmc']
+    qois = ['testing','testing']
     
 
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                       point_generation_method,
                                       delta,lambda_mult,qois,
                                       num_spatial_cores,dim=2)
-   
+
     # First qoi
-    assert np.isclose(output[1][0],(float(nu)+1.0)/2.0)
-    
-    assert np.isclose(output[2][0],np.sqrt((float(nu)+1.0)/12.0))
-    
+    for shift_no in range(nu):
+        assert np.allclose(output[1][shift_no][0],[float(ii) for ii in range(1,2**M + 1)])
+
     # Second qoi
-    assert np.isclose(output[1][1],(float(nu)+1.0)/2.0)
-    
-    assert np.isclose(output[2][1],np.sqrt((float(nu)+1.0)/12.0))
+    for shift_no in range(nu):
+        assert np.allclose(output[1][shift_no][1],[float(ii) for ii in range(1,2**M + 1)])
+
 
 @pytest.mark.xfail
 def test_multiple_qois_mc():

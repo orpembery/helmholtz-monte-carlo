@@ -4,74 +4,78 @@ import helmholtz_firedrake.problems as hh
 import numpy as np
 from helmholtz_firedrake import coefficients as coeff
 from helmholtz_firedrake import utils
+from cos_sin_integrals import cos_integral, sin_integral
 import pytest
 
 # I have no idea why this test doesn't work
-@pytest.mark.xfail
 def test_qoi_eval_integral():
-    """Tests that qois are evaluated correctly."""
+    """Tests that the qoi being the integral of the solution over the domain
+    is evaluated correctly."""
 
-    # Set up plane wave
-    dim = 2
+    np.random.seed(5)
+
+    angle_vals = 2.0*np.pi * np.random.random_sample(10)
+
+    errors = [[] for ii in range(len(angle_vals))]
+
+    num_points_multiplier = [1,2]
     
-    k = 20.0
+    for ii_num_points in range(2):
+        
+        for ii_angle in range(len(angle_vals)):
 
-    num_points = utils.h_to_num_cells(k**-1.5,dim)
-    
-    mesh = fd.UnitSquareMesh(num_points,num_points)
+            # Set up plane wave
+            dim = 2
 
-    J = 1
+            k = 20.0
 
-    delta = 2.0
+            num_points = num_points_multiplier[ii_num_points]*utils.h_to_num_cells(k**-1.5,dim)
 
-    lambda_mult = 1.0
+            comm = fd.COMM_WORLD
 
-    n_0 = 1.0
+            mesh = fd.UnitSquareMesh(num_points,num_points,comm)
 
-    num_points = 1
+            J = 1
 
-    stochastic_points = np.zeros((num_points,J))
-    
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
-    
-    V = fd.FunctionSpace(mesh,"CG",1)
+            delta = 2.0
 
-    prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
-    d_list = [np.cos(2.0*np.pi/3.0),np.sin(2.0*np.pi/3.0)]
-    #d_list = [np.cos(np.pi/16.0),np.sin(np.pi/16.0)]
-    # If d_list is changed to anything other than
-    # [np.cos(np.pi/4.0),np.sin(np.pi/4.0)]; I've tried
-    # [np.cos(2.0*np.pi/7.0),np.sin(2.0*np.pi/7.0)],
-    # [np.cos(np.pi/3.0),np.sin(np.pi/3.0)], and the above, then the
-    # tests fail, and don't appear to converge as you refine the mesh. I
-    # don't know why. Maybe the true solution for the qoi is wrong?
+            lambda_mult = 1.0
 
-    d = fd.as_vector(d_list)
-    prob.f_g_plane_wave()
+            n_0 = 1.0
 
-    prob.use_mumps()
+            num_points = 1
 
-    prob.solve()
+            stochastic_points = np.zeros((num_points,J))
 
-    # For the integral of the solution
-    output = gen_samples.qoi_eval(prob,'integral')
-    
+            n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
 
-    true_integral = plane_wave_integral(d_list,k,dim)
-    
-    # This should be the integral over the unit square/cube of a plane
-    # wave I've tweaked the definition of 'closeness' as there's
-    # obviously some FEM error coming in here. But working on a finer
-    # mesh, you see that the computed value approaches the true integral
-    # (I've only run it for a plane wave incident from the bottom-left
-    # corner), so I'm confident this is computing the correct value,
-    # modulo FEM error.  The value of rtol has been chosen by looking at
-    # the error for a plane wave incident from the bottom left (d =
-    # [1/sqrt(2),1/sqrt(2)]), and choosing rtol so that test
-    # passes. However, the actual test above is run with a different
-    # incident plane wave.
-    print(output)
-    assert np.isclose(output,true_integral,atol=1e-16,rtol=1e-2)
+            V = fd.FunctionSpace(mesh,"CG",1)
+
+            prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
+
+            prob.use_mumps()
+
+            angle = angle_vals[ii_angle]
+            
+            d = [np.cos(angle),np.sin(angle)]
+
+            prob.f_g_plane_wave(d)
+
+            prob.solve()
+
+            output = gen_samples.qoi_eval(prob,'integral',comm)
+
+            true_integral = cos_integral(k,d) + 1j * sin_integral(k,d)
+
+            error = np.abs(output-true_integral)
+
+            errors[ii_angle].append(error)
+
+    rate_approx = [np.log2(errors[ii][0]/errors[ii][1]) for ii in range(len(errors))]
+
+    # Relative tolerance obtained by selecting a passing value for a
+    # different random seed (seed=4)
+    assert np.allclose(rate_approx,2.0,atol=1e-16,rtol=1e-2)
 
     
     
@@ -105,10 +109,9 @@ def test_qoi_eval_origin():
 
     prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
 
-    d_list = [np.cos(2.0*np.pi/9.0),np.sin(2.0*np.pi/9.0)]
-
-    d = fd.as_vector(d_list)
-    prob.f_g_plane_wave()
+    d = [np.cos(2.0*np.pi/9.0),np.sin(2.0*np.pi/9.0)]
+    
+    prob.f_g_plane_wave(d)
 
     prob.use_mumps()
 
@@ -161,7 +164,7 @@ def test_qoi_eval_dummy():
     # why. Maybe the true solution for the qoi is wrong?
 
     d = fd.as_vector(d_list)
-    prob.f_g_plane_wave()
+    prob.f_g_plane_wave(d)
 
     prob.use_mumps()
 

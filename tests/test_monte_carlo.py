@@ -114,7 +114,9 @@ def test_all_qoi_samples():
 
     prob = hh.StochasticHelmholtzProblem(k,V,A_stoch=None,n_stoch=n_stoch)
 
-    prob.f_g_plane_wave()
+    angle = 2.0*np.pi/3.0
+    
+    prob.f_g_plane_wave([np.cos(angle),np.sin(angle)])
 
     prob.use_mumps()
 

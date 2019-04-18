@@ -1,4 +1,3 @@
-#from helmholtz_monte_carlo import error_analysis as err
 import pickle
 from generation_code import qmc_test,serial_filename
 import firedrake as fd
@@ -28,8 +27,6 @@ if __name__ == '__main__':
         on_balena = bool(int(sys.argv[1]))
     except IndexError:
         on_balena = False
-
-    print(on_balena)
     
     # Just need to figure out how to actually run the thing in parallel
     # in pytest. Maybe do Firedrake recursive MPI hackery? (In conftest)

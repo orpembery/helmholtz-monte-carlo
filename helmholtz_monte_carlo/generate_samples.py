@@ -7,10 +7,10 @@ import firedrake as fd
 import numpy as np
 import warnings
 
-def investigate_error(k,h_spec,J,nu,M,
-                      point_generation_method,
-                      delta,lambda_mult,qois,num_spatial_cores,dim=2,display_progress=False):
-    """Investigates the error in Monte-Carlo methods for Helmholtz.
+def generate_samples(k,h_spec,J,nu,M,
+                     point_generation_method,
+                     delta,lambda_mult,qois,num_spatial_cores,dim=2,display_progress=False):
+    """Generates samples for Monte-Carlo methods for Helmholtz.
 
     Computes an approximation to the root-mean-squared error in
     Monte-Carlo or Quasi-Monte Carlo approximations of expectations of
@@ -74,16 +74,16 @@ def investigate_error(k,h_spec,J,nu,M,
     time we sample.
 
     Output:
-    # MC needs updating for multiple QOIs
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    Warning: MC needs updating for multiple QOIs
     results - list containing 2 items: [k,samples], where samples is a
     list containing all of the samples of the QoI. If
-    point_generation_method is 'mc', then samples is a list of length nu
-    * (2**M), where each entry is a (complex-valued) float corresponding
-    to a sample of the QoI. If point_generation_method is 'qmc', then
-    samples is a list of length nu, where each entry of samples is a
-    list of length num_qois, each entry of which is a numpy array of
-    length 2**M, each entry of which is as above.
+    point_generation_method is 'mc', then samples is a list of length
+    num_qois, each entry of which is a numpy array of length nu * (2**M),
+    where each entry is a (complex-valued) float corresponding to a sample
+    of the QoI. If point_generation_method is 'qmc', then samples is a
+    list of length nu, where each entry of samples is a list of length
+    num_qois, each entry of which is a numpy array of length 2**M, each
+    entry of which is as above.
     """
 
     if point_generation_method is 'mc':
@@ -128,32 +128,10 @@ def investigate_error(k,h_spec,J,nu,M,
     if point_generation_method is 'mc':
 
         samples = all_qoi_samples(prob,qois,ensemble.comm,display_progress)
-        
-        # approx = []
-        
-        # error = []
-        # # Calculate the approximation
-        # for ii in range(num_qois):
-
-        #     this_approx = samples[ii].mean()
-        #     approx.append(this_approx)
-                        
-        #     # Calculate the error - formula taken from
-        #     # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
-        #     # 230, pp. 3668-3694 (2011), equation (4.4)]
-        #     this_error = np.sqrt(((samples[ii] - this_approx)**2.0).sum()\
-        #     /(float(N)*float(N-1)))
-        #     error.append(this_error)
                         
     elif point_generation_method == 'qmc':
 
         samples = []
-        
-        # approx = []
-        
-        # error = []
-
-        # all_approximations = [[] for ii in range(num_qois)]
                    
         for shift_no in range(nu):
             if display_progress:
@@ -165,36 +143,9 @@ def investigate_error(k,h_spec,J,nu,M,
             this_samples = all_qoi_samples(prob,qois,ensemble.comm,display_progress)
 
 
-            # Compute the approximation to the mean for
-            # these shifted points
-            
-            # # For testing
-            # if qois == ['testing_qmc']:
-            #     this_samples = [np.array(float(shift_no+1))]
-            # elif qois == ['testing_qmc','testing_qmc']:
-            #     this_samples = [np.array(float(shift_no+1)),np.array(float(shift_no+1))]
-                
-            # for ii in range(num_qois):
-
-            #     all_approximations[ii].append(this_samples[ii].mean())
-
             # For outputting samples
             samples.append(this_samples)
-
-        # all_approximations = [np.array(approximation) for approximation in all_approximations]
-                
-        # # Calculate the QMC approximations for each qoi
-        # approx = [approximation.mean() for approximation in all_approximations]
-
-        # # Calculate the error for each qoi - formula taken from
-        # # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
-        # # 230, pp. 3668-3694 (2011), equation (4.6)]
-        # error = [np.sqrt(((approx[ii]-all_approximations[ii])**2).sum()\
-        #                      /(float(nu)*(float(nu)-1.0))) for ii in range(num_qois)]
-
-    # Save data frame to file with extra metadata (how? -
-    # utility function?)
-    # TODO
+            
 
     comm = ensemble.ensemble_comm 
 

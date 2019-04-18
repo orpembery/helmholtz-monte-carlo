@@ -24,8 +24,10 @@ if __name__ == '__main__':
     time). 0 means we are not on Balena.
 
     """
-
-    on_balena = bool(int(sys.argv[1]))
+    try:
+        on_balena = bool(int(sys.argv[1]))
+    except IndexError:
+        on_balena = False
 
     print(on_balena)
     
@@ -33,6 +35,7 @@ if __name__ == '__main__':
     # in pytest. Maybe do Firedrake recursive MPI hackery? (In conftest)
 
     if on_balena:
+        print('loading module')
         from firedrake_complex_hacks import balena_hacks
         balena_hacks.fix_mesh_generation_time()
 

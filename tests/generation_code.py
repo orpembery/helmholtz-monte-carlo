@@ -19,7 +19,7 @@ def qmc_test(num_spatial_cores):
 
     qois = ['integral','origin']
 
-    return err.investigate_error(k,h_spec,J,nu,M,'qmc',delta,lambda_mult,qois,num_spatial_cores=num_spatial_cores,dim=2,display_progress=False)
+    return err.investigate_error(k,h_spec,J,nu,M,'qmc',delta,lambda_mult,qois,num_spatial_cores=num_spatial_cores,dim=2,display_progress=True)
 
 def serial_filename():
     """Filename serial code is saved as."""

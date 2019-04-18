@@ -1,4 +1,3 @@
-#from helmholtz_monte_carlo import error_analysis as err
 import pickle
 from generation_code import qmc_test,serial_filename
 import firedrake as fd

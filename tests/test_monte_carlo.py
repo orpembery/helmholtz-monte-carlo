@@ -1,6 +1,6 @@
 import firedrake as fd
 import helmholtz_monte_carlo.point_generation as point_gen
-import helmholtz_monte_carlo.error_analysis as err_an
+import helmholtz_monte_carlo.generate_samples as gen_samples
 import helmholtz_firedrake.problems as hh
 import numpy as np
 import latticeseq_b2
@@ -118,7 +118,7 @@ def test_all_qoi_samples():
 
     prob.use_mumps()
 
-    samples = err_an.all_qoi_samples(prob,['testing'],False)
+    samples = gen_samples.all_qoi_samples(prob,['testing'],False)
     assert len(samples) == 1
     assert np.allclose(samples[0],np.arange(1.0,float(num_points)+1.0))
 
@@ -142,9 +142,9 @@ def test_mc_calculation():
 
     qois = ['testing']
 
-    output = err_an.investigate_error(k,h_spec,J,nu,M,
-                                      point_generation_method,
-                                      delta,lambda_mult,qois,dim=2)
+    output = gen_samples.generate_samples(k,h_spec,J,nu,M,
+                                          point_generation_method,
+                                          delta,lambda_mult,qois,dim=2)
 
     N = float(nu*2**M)
     
@@ -177,10 +177,10 @@ def test_qmc_calculation():
 
     num_spatial_cores = 1
 
-    output = err_an.investigate_error(k,h_spec,J,nu,M,
-                                      point_generation_method,
-                                      delta,lambda_mult,qois,
-                                      num_spatial_cores,dim=2)
+    output = gen_samples.generate_samples(k,h_spec,J,nu,M,
+                                          point_generation_method,
+                                          delta,lambda_mult,qois,
+                                          num_spatial_cores,dim=2)
     
     assert np.isclose(output[1],(float(nu)+1.0)/2.0)
     
@@ -228,7 +228,7 @@ def test_qoi_samples_integral():
 
     prob.use_mumps()
 
-    samples = err_an.all_qoi_samples(prob,['integral'])
+    samples = gen_samples.all_qoi_samples(prob,['integral'])
 
     # Should be just one sample
     assert samples[0].shape[0] == 1
@@ -287,7 +287,7 @@ def test_qoi_samples_origin():
 
     prob.use_mumps()
 
-    samples = err_an.all_qoi_samples(prob,['origin'],False)
+    samples = gen_samples.all_qoi_samples(prob,['origin'],False)
 
     # Should be just one sample
     assert samples[0].shape[0] == 1
@@ -329,7 +329,7 @@ def test_multiple_qois_qmc():
     qois = ['testing_qmc','testing_qmc']
     
 
-    output = err_an.investigate_error(k,h_spec,J,nu,M,
+    output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                       point_generation_method,
                                       delta,lambda_mult,qois,
                                       num_spatial_cores,dim=2)
@@ -368,9 +368,9 @@ def test_multiple_qois_mc():
     qois = ['testing','testing']
     
 
-    output = err_an.investigate_error(k,h_spec,J,nu,M,
-                                      point_generation_method,
-                                      delta,lambda_mult,qois,dim=2)
+    output = gen_samples.generate_samples(k,h_spec,J,nu,M,
+                                          point_generation_method,
+                                          delta,lambda_mult,qois,dim=2)
 
     N = nu*(2**M)
     
@@ -413,7 +413,7 @@ def test_qoi_finder():
 
     this_qoi = 'integral'
 
-    output = err_an.qoi_finder(qois,this_qoi)
+    output = gen_samples.qoi_finder(qois,this_qoi)
 
     assert output[0]
 
@@ -421,7 +421,7 @@ def test_qoi_finder():
 
     this_qoi = 'origin'
 
-    output = err_an.qoi_finder(qois,this_qoi)
+    output = gen_samples.qoi_finder(qois,this_qoi)
 
     assert output[0]
 
@@ -429,7 +429,7 @@ def test_qoi_finder():
 
     this_qoi = 'foo'
 
-    output = err_an.qoi_finder(qois,this_qoi)
+    output = gen_samples.qoi_finder(qois,this_qoi)
     
     assert not output[0]
 
@@ -483,7 +483,7 @@ def test_qoi_eval_integral():
     prob.solve()
 
     # For the integral of the solution
-    output = err_an.qoi_eval(prob,'integral')
+    output = gen_samples.qoi_eval(prob,'integral')
     
 
     true_integral = plane_wave_integral(d_list,k,dim)
@@ -544,7 +544,7 @@ def test_qoi_eval_origin():
     prob.solve()
 
     # For the value of the solution at the origin:
-    output = err_an.qoi_eval(prob,'origin')
+    output = gen_samples.qoi_eval(prob,'origin')
     # Tolerances values were ascertained to work for a different wave
     # direction. They're also the same as those in the test above.
     true_value = 1.0 + 0.0 * 1j
@@ -598,7 +598,7 @@ def test_qoi_eval_dummy():
 
     # For the dummy we use for testing:
     this_dummy = 4.0
-    output = err_an.qoi_eval(this_dummy,'testing')
+    output = gen_samples.qoi_eval(this_dummy,'testing')
 
     assert np.isclose(output,this_dummy)
 

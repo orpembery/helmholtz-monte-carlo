@@ -84,7 +84,7 @@ def test_points_shift():
     # they are equal, or they differ by 1.
     differences = (shift_0 - shift_1) * (np.abs(shift_0-shift_1) - 1)
 
-    assert (differences == 0).all()
+    assert np.allclose(differences,0)
     
     # Heuristic check (similar to that in test_mc_points_correct) that
     # the shift is random.
@@ -92,7 +92,7 @@ def test_points_shift():
 
 def test_all_qoi_samples():
     """Test that the code correctly samples all of the stochastic points."""
-    mesh = fd.UnitSquareMesh(10,10)
+    mesh = fd.UnitSquareMesh(10,10,comm=fd.COMM_WORLD)
 
     J = 100
 
@@ -118,7 +118,7 @@ def test_all_qoi_samples():
 
     prob.use_mumps()
 
-    samples = gen_samples.all_qoi_samples(prob,['testing'],False)
+    samples = gen_samples.all_qoi_samples(prob,['testing'],fd.COMM_WORLD,False)
     assert len(samples) == 1
     assert np.allclose(samples[0],np.arange(1.0,float(num_points)+1.0))
 
@@ -199,7 +199,7 @@ def test_qoi_samples_integral():
 
     num_points = utils.h_to_num_cells(k**-1.5,dim)
     
-    mesh = fd.UnitSquareMesh(num_points,num_points)
+    mesh = fd.UnitSquareMesh(num_points,num_points,comm=fd.COMM_WORLD)
 
     J = 1
 
@@ -228,7 +228,7 @@ def test_qoi_samples_integral():
 
     prob.use_mumps()
 
-    samples = gen_samples.all_qoi_samples(prob,['integral'])
+    samples = gen_samples.all_qoi_samples(prob,['integral'],fd.COMM_WORLD,False)
 
     # Should be just one sample
     assert samples[0].shape[0] == 1
@@ -260,7 +260,7 @@ def test_qoi_samples_origin():
 
     num_points = utils.h_to_num_cells(k**-1.5,dim)
     
-    mesh = fd.UnitSquareMesh(num_points,num_points)
+    mesh = fd.UnitSquareMesh(num_points,num_points,comm=fd.COMM_WORLD)
 
     J = 1
 
@@ -287,7 +287,7 @@ def test_qoi_samples_origin():
 
     prob.use_mumps()
 
-    samples = gen_samples.all_qoi_samples(prob,['origin'],False)
+    samples = gen_samples.all_qoi_samples(prob,['origin'],fd.COMM_WORLD,False)
 
     # Should be just one sample
     assert samples[0].shape[0] == 1
@@ -544,7 +544,7 @@ def test_qoi_eval_origin():
     prob.solve()
 
     # For the value of the solution at the origin:
-    output = gen_samples.qoi_eval(prob,'origin')
+    output = gen_samples.qoi_eval(prob,'origin',comm=fd.COMM_WORLD)
     # Tolerances values were ascertained to work for a different wave
     # direction. They're also the same as those in the test above.
     true_value = 1.0 + 0.0 * 1j
@@ -562,7 +562,7 @@ def test_qoi_eval_dummy():
 
     num_points = utils.h_to_num_cells(k**-1.5,dim) # changed here
     
-    mesh = fd.UnitSquareMesh(num_points,num_points)
+    mesh = fd.UnitSquareMesh(num_points,num_points,comm=fd.COMM_WORLD)
 
     J = 1
 
@@ -598,7 +598,7 @@ def test_qoi_eval_dummy():
 
     # For the dummy we use for testing:
     this_dummy = 4.0
-    output = gen_samples.qoi_eval(this_dummy,'testing')
+    output = gen_samples.qoi_eval(this_dummy,'testing',comm=fd.COMM_WORLD)
 
     assert np.isclose(output,this_dummy)
 

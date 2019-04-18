@@ -54,8 +54,7 @@ def mean_and_error(mc_output,point_generation_method):
         for ii in range(num_qois):
 
             for shift_no in range(nu):
-                
-                approx_for_each_shift[ii].append(samples[nu][ii].mean())
+                approx_for_each_shift[ii].append(samples[shift_no][ii].mean())
 
 
         approx_for_each_shift = [np.array(approximation) for approximation in approx_for_each_shift]

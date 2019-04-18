@@ -79,7 +79,7 @@ def generate_samples(k,h_spec,J,nu,M,
     results - list containing 2 items: [k,samples], where samples is a
     list containing all of the samples of the QoI. If
     point_generation_method is 'mc', then samples is a list of length
-    num_qois, eahc netry of which is a numpy array of length nu * (2**M),
+    num_qois, each entry of which is a numpy array of length nu * (2**M),
     where each entry is a (complex-valued) float corresponding to a sample
     of the QoI. If point_generation_method is 'qmc', then samples is a
     list of length nu, where each entry of samples is a list of length

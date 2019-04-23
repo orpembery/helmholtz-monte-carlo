@@ -151,7 +151,6 @@ def generate_samples(k,h_spec,J,nu,M,
             prob.n_stoch.change_all_points(
                 point_gen.shift(kl_mc_points,seed=shift_no))
 
-            # This isn't going to work because of parallelism - need to do things like for samples !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             n_coeffs.append(deepcopy(prob.n_stoch.current_and_unsampled_points()))
             
             this_samples = all_qoi_samples(prob,qois,ensemble.comm,display_progress)
@@ -163,7 +162,9 @@ def generate_samples(k,h_spec,J,nu,M,
 
     samples = fancy_allgather(comm,samples,'samples')
 
-    return [k,samples]
+    n_coeffs = fancy_allgather(comm,n_coeffs,'coeffs')
+    
+    return [k,samples,n_coeffs]
 
 def fancy_allgather(comm,to_gather,gather_type):
     """Effectively does an allgather, but for the kind of list we're

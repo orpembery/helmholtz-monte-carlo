@@ -1,5 +1,6 @@
 import pickle
-from generation_code import serial_filename, qmc_test
+from generation_code import serial_filename
+import serial_output_code
 import numpy as np
 from shutil import copyfile
 from os import remove
@@ -13,7 +14,7 @@ def test_serial_code():
         copyfile(serial_filename(),temp_filename)
         
         # Run serial code
-        qmc_test(1)
+        serial_output_code.serial_output_code()
     
         with open(serial_filename(),'rb') as f:
             qmc_out = pickle.load(f)

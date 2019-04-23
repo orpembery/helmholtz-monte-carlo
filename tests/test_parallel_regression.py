@@ -57,17 +57,17 @@ if __name__ == '__main__':
 
                 for ii in range(1,len(old_out)):
                     assert(len(old_out[ii])==len(qmc_out[ii]))
-                    for jj in range(len(old_out[1])):
-                        # For some reason, the sizes of these variables (in
-                        # bytes) aren't always the same. I've no idea why.
-                        # Hence, this assertion is commented out.
-                        #assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
-                        pass
 
                 for ii in range(1,len(qmc_out)):
                     assert(len(old_out[ii])==len(qmc_out[ii]))
-                    for jj in range(len(qmc_out[1])):
-                        for kk in range(len(qmc_out[1][0])):
-                            # Commented out here for same reason as above
-                            #assert getsizeof(qmc_out[ii][jj]) == getsizeof(old_out[ii][jj]) 
-                            assert np.all(np.isclose(qmc_out[ii][jj][kk],old_out[ii][jj][kk]))
+                for jj in range(len(qmc_out[1])):
+                    for kk in range(len(qmc_out[1][0])):
+                        # For some reason, the sizes of these variables (in
+                        # bytes) aren't always the same. I've no idea why.
+                        # Hence, this assertion is commented out.
+                        #assert getsizeof(qmc_out[ii][jj]) == getsizeof(old_out[ii][jj])
+                        assert np.all(np.isclose(qmc_out[1][jj][kk],old_out[1][jj][kk]))
+
+                for jj in range(len(qmc_out[2])):
+                    # test the n_coeffs have been calculated correctly
+                    assert np.all(qmc_out[2][jj]==old_out[2][jj])

@@ -201,15 +201,18 @@ def fancy_allgather(comm,to_gather,gather_type):
     if comm.rank == 0:
         gathered = to_gather
         for ii_to_gather in range(len(to_gather)):
-            if gather_type is 'samples':
-                for ii_qoi in range(len(to_gather[0])):
-                    for ii in range(1,comm.size):
-                        rec_gathered = gathered_tmp[ii]
+            for ii in range(1,comm.size):
+                rec_gathered = gathered_tmp[ii]
+
+                if gather_type is 'samples':
+                    for ii_qoi in range(len(to_gather[0])):
                         gathered[ii_to_gather][ii_qoi] = np.hstack((gathered[ii_to_gather][ii_qoi],rec_gathered[ii_to_gather][ii_qoi]))
-            elif gather_type is 'coeffs':
-                pass # Currently
-            else:
-                raise NotImplementedError
+                        
+                elif gather_type is 'coeffs':
+                    gathered[ii_to_gather] = np.vstack(gathered[ii_to_gather],rec_gathered[ii_to_gather])
+                    
+                else:
+                    raise NotImplementedError
             
     # Broadcast
     gathered = comm.bcast(gathered,root=0)

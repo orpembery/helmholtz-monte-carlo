@@ -6,6 +6,7 @@ import helmholtz_monte_carlo.point_generation as point_gen
 import firedrake as fd
 import numpy as np
 import warnings
+from copy import deepcopy
 
 def generate_samples(k,h_spec,J,nu,M,
                      point_generation_method,
@@ -74,16 +75,22 @@ def generate_samples(k,h_spec,J,nu,M,
     time we sample.
 
     Output:
-    Warning: MC needs updating for multiple QOIs
-    results - list containing 2 items: [k,samples], where samples is a
-    list containing all of the samples of the QoI. If
-    point_generation_method is 'mc', then samples is a list of length
-    num_qois, each entry of which is a numpy array of length nu * (2**M),
-    where each entry is a (complex-valued) float corresponding to a sample
-    of the QoI. If point_generation_method is 'qmc', then samples is a
-    list of length nu, where each entry of samples is a list of length
-    num_qois, each entry of which is a numpy array of length 2**M, each
-    entry of which is as above.
+    Warning: MC needs updating for multiple QOIs results - list
+    containing 3 items: [k,samples,n_coeffs], where samples is a list
+    containing all of the samples of the QoI, and n_coeffs is a list
+    containing all of the KL-coefficients for each realisation of n.
+
+    If point_generation_method is 'mc', then samples is a list of length
+    num_qois, each entry of which is a numpy array of length nu *
+    (2**M), where each entry is a (complex-valued) float corresponding
+    to a sample of the QoI.
+
+    If point_generation_method is 'qmc', then samples is a list of
+    length nu, where each entry of samples is a list of length num_qois,
+    each entry of which is a numpy array of length 2**M, each entry of
+    which is as above. n_coeffs is a list of length nu, each entry of
+    which is a 2**M by J numpy array, each row of which contains the
+    KL-coefficients needed to generate the particular realisation of n.
     """
 
     if point_generation_method is 'mc':
@@ -98,7 +105,9 @@ def generate_samples(k,h_spec,J,nu,M,
     
     mesh = fd.UnitSquareMesh(mesh_points,mesh_points,comm=ensemble.comm)
 
-    comm = ensemble.ensemble_comm 
+    comm = ensemble.ensemble_comm
+
+    n_coeffs = []
         
     if point_generation_method is 'mc':
         # This needs updating one I've figured out a way to do seeding in a parallel-appropriate way !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
@@ -142,29 +151,70 @@ def generate_samples(k,h_spec,J,nu,M,
             prob.n_stoch.change_all_points(
                 point_gen.shift(kl_mc_points,seed=shift_no))
 
+            # This isn't going to work because of parallelism - need to do things like for samples !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            n_coeffs.append(deepcopy(prob.n_stoch.current_and_unsampled_points()))
+            
             this_samples = all_qoi_samples(prob,qois,ensemble.comm,display_progress)
-
 
             # For outputting samples
             samples.append(this_samples)
+
+            
             
 
     comm = ensemble.ensemble_comm 
 
+    samples = fancy_allgather(comm,samples,'samples')
+
+    return [k,samples]
+
+def fancy_allgather(comm,to_gather,gather_type):
+    """Effectively does an allgather, but for the kind of list we're
+    using here as a datastructure.
+
+    Inputs:
+
+    comm - the MPI communicator over which to do the gather.
+
+    to_gather - the list (of lists, possibly) to gather onto all
+    processes
+
+    gather_type - a string, either 'samples' or 'coeffs'. If 'samples',
+    assumes each entry of to_gather is itself a list, and each entry of
+    this list is a 1-d numpy array, and we gather by concatenating all
+    these arrays together. If 'coeffs', assumes each entry of to_gather
+    is a 2-d numpy array, and we gather by vertically concatenating
+    these.
+
+    Outputs:
+
+    gathered - the gathered list, should have the same format as
+    to_gather, but holds the data from all of them.
+    """
+
     # Despite the fact that there will be multiple procs with rank 0, I'm going to assume for now that this all works.
-    samples_tmp = comm.gather(samples,root=0)
+    gathered_tmp = comm.gather(to_gather,root=0)
+
+    gathered = []
     
     #Whip it all into order
     if comm.rank == 0:
-        for shift_no in range(nu):
-            for qoi_no in range(num_qois):
-                for ii in range(1,comm.size):
-                    rec_samples = samples_tmp[ii]
-                    samples[shift_no][qoi_no] = np.hstack((samples[shift_no][qoi_no],rec_samples[shift_no][qoi_no]))
+        gathered = to_gather
+        for ii_to_gather in range(len(to_gather)):
+            if gather_type is 'samples':
+                for ii_qoi in range(len(to_gather[0])):
+                    for ii in range(1,comm.size):
+                        rec_gathered = gathered_tmp[ii]
+                        gathered[ii_to_gather][ii_qoi] = np.hstack((gathered[ii_to_gather][ii_qoi],rec_gathered[ii_to_gather][ii_qoi]))
+            elif gather_type is 'coeffs':
+                pass # Currently
+            else:
+                raise NotImplementedError
+            
     # Broadcast
-    samples = comm.bcast(samples,root=0)
+    gathered = comm.bcast(gathered,root=0)
 
-    return [k,samples]
+    return gathered
                     
 
 def all_qoi_samples(prob,qois,comm,display_progress):

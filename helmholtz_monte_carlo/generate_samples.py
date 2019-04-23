@@ -157,10 +157,7 @@ def generate_samples(k,h_spec,J,nu,M,
             this_samples = all_qoi_samples(prob,qois,ensemble.comm,display_progress)
 
             # For outputting samples
-            samples.append(this_samples)
-
-            
-            
+            samples.append(this_samples)            
 
     comm = ensemble.ensemble_comm 
 
@@ -172,12 +169,14 @@ def fancy_allgather(comm,to_gather,gather_type):
     """Effectively does an allgather, but for the kind of list we're
     using here as a datastructure.
 
+    The gather should be over an ensemble communicator, not a spatial one.
+
     Inputs:
 
     comm - the MPI communicator over which to do the gather.
 
     to_gather - the list (of lists, possibly) to gather onto all
-    processes
+    processes.
 
     gather_type - a string, either 'samples' or 'coeffs'. If 'samples',
     assumes each entry of to_gather is itself a list, and each entry of
@@ -209,7 +208,7 @@ def fancy_allgather(comm,to_gather,gather_type):
                         gathered[ii_to_gather][ii_qoi] = np.hstack((gathered[ii_to_gather][ii_qoi],rec_gathered[ii_to_gather][ii_qoi]))
                         
                 elif gather_type is 'coeffs':
-                    gathered[ii_to_gather] = np.vstack(gathered[ii_to_gather],rec_gathered[ii_to_gather])
+                    gathered[ii_to_gather] = np.vstack((gathered[ii_to_gather],rec_gathered[ii_to_gather]))
                     
                 else:
                     raise NotImplementedError

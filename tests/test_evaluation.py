@@ -41,13 +41,15 @@ def test_qoi_eval_integral():
 
             lambda_mult = 1.0
 
+            j_scaling = 1.0
+
             n_0 = 1.0
 
             num_points = 1
 
             stochastic_points = np.zeros((num_points,J))
 
-            n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
+            n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,j_scaling,n_0,stochastic_points)
 
             V = fd.FunctionSpace(mesh,"CG",1)
 
@@ -97,13 +99,15 @@ def test_qoi_eval_origin():
 
     lambda_mult = 1.0
 
+    j_scaling = 1.0
+
     n_0 = 1.0
 
     num_points = 1
 
     stochastic_points = np.zeros((num_points,J))
     
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
+    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,j_scaling,n_0,stochastic_points)
     
     V = fd.FunctionSpace(mesh,"CG",1)
 
@@ -144,13 +148,15 @@ def test_qoi_eval_dummy():
 
     lambda_mult = 1.0
 
+    j_scaling = 1.0
+
     n_0 = 1.0
 
     num_points = 1
 
     stochastic_points = np.zeros((num_points,J))
     
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
+    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,j_scaling,n_0,stochastic_points)
     
     V = fd.FunctionSpace(mesh,"CG",1)
 
@@ -197,4 +203,3 @@ def plane_wave_integral(d_list,k,dim):
     integral_2 = (1 + np.exp(1j * k * d_calc)).prod()
 
     return integral_1 * integral_2
-

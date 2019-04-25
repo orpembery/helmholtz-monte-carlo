@@ -66,6 +66,8 @@ def generate_samples(k,h_spec,J,nu,M,
     are:
         'integral' - the integral of the solution over the domain.
         'origin' the point value at the origin.
+        'top_right' the point value at (1,1)
+        'gradient_top_right' the gradient at (1,1)
     There are also the options 'testing' and 'testing_qmc', but these
     are used solely for testing the functions.
 
@@ -87,7 +89,7 @@ def generate_samples(k,h_spec,J,nu,M,
 
     If point_generation_method is 'mc', then samples is a list of length
     num_qois, each entry of which is a numpy array of length nu *
-    (2**M), where each entry is a (complex-valued) float corresponding
+    (2**M), where each entry is either: (i) a (complex-valued) float, or (ii) a numpy column vector, corresponding
     to a sample of the QoI.
 
     If point_generation_method is 'qmc', then samples is a list of
@@ -354,6 +356,10 @@ def qoi_eval(prob,this_qoi,comm):
         # This gives the value of the function at (0,0).
         output = eval_at_mesh_point(prob.u_h,np.array([0.0,0.0]),comm)
 
+    elif this_qoi is 'top_right':
+        # This gives the value of the function at (1,1).
+        output = eval_at_mesh_point(prob.u_h,np.array([1.0,1.0]),comm)
+
     elif this_qoi is 'gradient_top_right':
         # This gives the gradient of the solution at the
         # top-right-hand corner of the domain.
@@ -368,7 +374,7 @@ def qoi_eval(prob,this_qoi,comm):
 
         point = tuple([1.0 for ii in range(len(gradient))])
             
-        output = np.array([eval_at_mesh_point(DG_fun,point,comm) for DG_fun in DG_functions])
+        output = np.array([[eval_at_mesh_point(DG_fun,point,comm)] for DG_fun in DG_functions],ndmin=2)
 
     else:
         output = None
@@ -377,7 +383,7 @@ def qoi_eval(prob,this_qoi,comm):
         
 def eval_at_mesh_point(v,point,comm):
     """Evaluates a Function at a point on the mesh. Only tested for
-    1st-order CG elements.
+    1st-order CG and 0th- and 1st-order DG elements.
 
     Parameters:
 

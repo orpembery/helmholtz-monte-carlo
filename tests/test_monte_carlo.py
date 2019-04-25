@@ -100,13 +100,15 @@ def test_all_qoi_samples():
 
     lambda_mult = 1.0
 
+    j_scaling = 1.0
+
     n_0 = 1.0
 
     num_points = 20
 
     stochastic_points = np.zeros((num_points,J))
     
-    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,n_0,stochastic_points)
+    n_stoch = coeff.UniformKLLikeCoeff(mesh,J,delta,lambda_mult,j_scaling,n_0,stochastic_points)
 
     k = 1.0
     
@@ -142,13 +144,15 @@ def test_mc_sample_generation():
 
     lambda_mult = 1.0
 
+    j_scaling = 1.0
+
     num_spatial_cores = 1
 
     qois = ['testing']
 
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                           point_generation_method,
-                                          delta,lambda_mult,qois,num_spatial_cores,dim=2)
+                                          delta,lambda_mult,j_scaling,qois,num_spatial_cores,dim=2)
 
     N = float(nu*2**M)
     
@@ -176,13 +180,15 @@ the qois) for qmc points happens in an expected way."""
 
     lambda_mult = 1.0
 
+    j_scaling = 1.0
+
     qois = ['testing']
 
     num_spatial_cores = 1
 
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                           point_generation_method,
-                                          delta,lambda_mult,qois,
+                                          delta,lambda_mult,j_scaling,qois,
                                           num_spatial_cores,dim=2)
 
     for shift_no in range(nu):
@@ -209,6 +215,8 @@ def test_multiple_qois_qmc():
 
     lambda_mult = 1.0
 
+    j_scaling = 1.0
+    
     num_spatial_cores = 1
     
     # This is just testing that we correctly handle multiple qois
@@ -216,9 +224,9 @@ def test_multiple_qois_qmc():
     
 
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
-                                      point_generation_method,
-                                      delta,lambda_mult,qois,
-                                      num_spatial_cores,dim=2)
+                                          point_generation_method,
+                                          delta,lambda_mult,j_scaling,qois,
+                                          num_spatial_cores,dim=2)
 
     # First qoi
     for shift_no in range(nu):
@@ -249,13 +257,15 @@ def test_multiple_qois_mc():
 
     lambda_mult = 1.0
 
+    j_scaling = 1.0
+
     # This is just testing that we correctly handle multiple qois
     qois = ['testing','testing']
     
 
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                           point_generation_method,
-                                          delta,lambda_mult,qois,dim=2)
+                                          delta,lambda_mult,j_scaling,qois,dim=2)
 
     N = nu*(2**M)
     

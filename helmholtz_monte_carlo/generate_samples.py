@@ -10,7 +10,7 @@ from copy import deepcopy
 
 def generate_samples(k,h_spec,J,nu,M,
                      point_generation_method,
-                     delta,lambda_mult,qois,num_spatial_cores,dim=2,display_progress=False):
+                     delta,lambda_mult,j_scaling,qois,num_spatial_cores,dim=2,display_progress=False):
     """Generates samples for Monte-Carlo methods for Helmholtz.
 
     Computes an approximation to the root-mean-squared error in
@@ -56,11 +56,18 @@ def generate_samples(k,h_spec,J,nu,M,
     helmholtz_firedrake.coefficients.UniformKLLikeCoeff for more
     information.
 
+    j_scaling - parameter controlling the oscillation in the basis
+    functions in the artifical-KL expansion - see
+    helmholtz_firedrake.coefficients.UniformKLLikeCoeff for more
+    information.
+
     qois - list of strings - the Quantities of Interest that are
     computed. Currently the only options for the elements of the string
     are:
         'integral' - the integral of the solution over the domain.
         'origin' the point value at the origin.
+        'top_right' the point value at (1,1)
+        'gradient_top_right' the gradient at (1,1)
     There are also the options 'testing' and 'testing_qmc', but these
     are used solely for testing the functions.
 
@@ -82,7 +89,7 @@ def generate_samples(k,h_spec,J,nu,M,
 
     If point_generation_method is 'mc', then samples is a list of length
     num_qois, each entry of which is a numpy array of length nu *
-    (2**M), where each entry is a (complex-valued) float corresponding
+    (2**M), where each entry is either: (i) a (complex-valued) float, or (ii) a numpy column vector, corresponding
     to a sample of the QoI.
 
     If point_generation_method is 'qmc', then samples is a list of
@@ -123,7 +130,7 @@ def generate_samples(k,h_spec,J,nu,M,
     n_0 = 1.0
                 
     kl_like = coeff.UniformKLLikeCoeff(
-        mesh,J,delta,lambda_mult,n_0,kl_mc_points)
+        mesh,J,delta,lambda_mult,j_scaling,n_0,kl_mc_points)
 
     # Create the problem
     V = fd.FunctionSpace(mesh,"CG",1)
@@ -348,6 +355,27 @@ def qoi_eval(prob,this_qoi,comm):
     elif this_qoi is 'origin':
         # This gives the value of the function at (0,0).
         output = eval_at_mesh_point(prob.u_h,np.array([0.0,0.0]),comm)
+
+    elif this_qoi is 'top_right':
+        # This gives the value of the function at (1,1).
+        output = eval_at_mesh_point(prob.u_h,np.array([1.0,1.0]),comm)
+
+    elif this_qoi is 'gradient_top_right':
+        # This gives the gradient of the solution at the
+        # top-right-hand corner of the domain.
+        gradient = fd.grad(prob.u_h)
+
+        DG_spaces = [fd.FunctionSpace(prob.V.mesh(),"DG",1) for ii in range(len(gradient))]
+
+        DG_functions = [fd.Function(DG_space) for DG_space in DG_spaces]
+
+        for ii in range(len(DG_functions)):
+            DG_functions[ii].interpolate(gradient[ii])
+
+        point = tuple([1.0 for ii in range(len(gradient))])
+            
+        output = np.array([[eval_at_mesh_point(DG_fun,point,comm)] for DG_fun in DG_functions],ndmin=2)
+
     else:
         output = None
 
@@ -355,7 +383,7 @@ def qoi_eval(prob,this_qoi,comm):
         
 def eval_at_mesh_point(v,point,comm):
     """Evaluates a Function at a point on the mesh. Only tested for
-    1st-order CG elements.
+    1st-order CG and 0th- and 1st-order DG elements.
 
     Parameters:
 
@@ -366,45 +394,38 @@ def eval_at_mesh_point(v,point,comm):
 
     comm - the communicator for spatial parallelism.
     """
-
     mesh = v.function_space().mesh()
         
     location_in_list = []
     
     # In each dimension, find out which mesh points match the ith
     # coordinate of our desired point.
+
+    data_tmp = deepcopy(v.dat.data_ro)
+    
     for ii in range(len(point)):
 
-        coords = mesh.coordinates.sub(ii).vector().dat.data_ro
+        # Need to interpolate the coordinates into the function space,
+        # to allow for DG spaces, where the node coordinates aren't in
+        # a one-to-one correspondence with the DoFs.        
+        v.interpolate(mesh.coordinates[ii])
 
-        location_in_list.append(coords==point[ii])
+        coords = v.vector().gather()
 
-    # Do an 'and' across all the dimensions to find the index of our
-    # point
-    loc_2d = [ location_in_list[0][jj] and location_in_list[1][jj] for jj in range(len(location_in_list[0]))]
-
-    if len(location_in_list) == 3:
-
-        loc = [ loc_2d[jj] and location_in_list[2][jj] for jj in range(len(location_in_list[2]))]
-
-    else:
-        loc = loc_2d
-
-    # Get the value of the point (only happens on one proc) and
-    # broadcast it (hackily) to all the other procs.
+        dists = np.abs(np.real(coords - point[ii]))
     
-    value = v.vector().dat.data_ro[loc]
+        if ii == 0:
+            distances_to_point = dists
+        else:
+            distances_to_point = np.vstack((distances_to_point,dists))
+        
+    norm_distances = np.linalg.norm(distances_to_point,axis=0,ord=2)
 
-    rank = comm.rank    
+    min_dist = np.min(norm_distances)
 
-    if len(value) == 1:
-        bcast_rank = rank
-    else:
-        bcast_rank = None
+    loc = np.isclose(norm_distances,min_dist)
     
-    bcast_rank = comm.allgather(bcast_rank)
-
-    bcast_rank = np.array(bcast_rank)[[ii != None for ii in bcast_rank]][0]
-
-    return comm.bcast(value,root=bcast_rank)[0]
-
+    # Put the old data back
+    v.dat.data[:] = data_tmp
+    
+    return v.vector().gather()[loc][0]

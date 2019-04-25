@@ -11,4 +11,6 @@ do
     mpirun -n ${num_procs} python test_parallel_regression.py $1
 
     mpirun -n ${num_procs} python test_parallel_coeff_gather.py $1
+
+    mpirun -n ${num_procs} python test_parallel_point_evaluation.py $1
 done

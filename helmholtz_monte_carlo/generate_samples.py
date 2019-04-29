@@ -338,10 +338,10 @@ def qoi_eval(prob,this_qoi,comm):
     problem. None if this_qoi is not in the list above.
 
     """
-    if this_qoi is 'testing':
+    if this_qoi == 'testing':
         output = prob
 
-    elif this_qoi is 'integral':
+    elif this_qoi == 'integral':
         # This is currently a bit of a hack, because there's a bug
         # in complex firedrake.
         # It's also non-obvious why this works in parallel....
@@ -352,15 +352,15 @@ def qoi_eval(prob,this_qoi,comm):
         func_imag.dat.data[:] = np.imag(prob.u_h.dat.data)
         output = fd.assemble(func_real * fd.dx) + 1j * fd.assemble(func_imag * fd.dx)
         
-    elif this_qoi is 'origin':
+    elif this_qoi == 'origin':
         # This gives the value of the function at (0,0).
         output = eval_at_mesh_point(prob.u_h,np.array([0.0,0.0]),comm)
 
-    elif this_qoi is 'top_right':
+    elif this_qoi == 'top_right':
         # This gives the value of the function at (1,1).
         output = eval_at_mesh_point(prob.u_h,np.array([1.0,1.0]),comm)
 
-    elif this_qoi is 'gradient_top_right':
+    elif this_qoi == 'gradient_top_right':
         # This gives the gradient of the solution at the
         # top-right-hand corner of the domain.
         gradient = fd.grad(prob.u_h)

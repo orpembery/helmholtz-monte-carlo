@@ -139,7 +139,11 @@ def generate_samples(k,h_spec,J,nu,M,
 
     angle = np.pi/4.0
     
-    prob.f_g_plane_wave([np.cos(angle),np.sin(angle)])
+    prob.f_g_scattered_plane_wave([np.cos(angle),np.sin(angle)])
+
+    prob.sharp_cutoff(np.array((0.5,0.5)),0.75)
+
+    prob.n_min(0.1)
 
     prob.use_mumps()
                 

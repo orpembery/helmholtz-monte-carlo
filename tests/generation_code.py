@@ -21,7 +21,7 @@ def qmc_test(num_spatial_cores):
 
     qois = ['integral','origin']
 
-    return gen_samples.generate_samples(k,h_spec,J,nu,M,'qmc',delta,lambda_mult,j_scaling,qois,num_spatial_cores=num_spatial_cores,dim=2,display_progress=True)
+    return gen_samples.generate_samples(k,h_spec,J,nu,M,'qmc',delta,lambda_mult,j_scaling,qois,num_spatial_cores=num_spatial_cores,dim=2,display_progress=True,physically_realistic=False)
 
 def serial_filename():
     """Filename serial code is saved as."""

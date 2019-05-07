@@ -10,7 +10,10 @@ from copy import deepcopy
 
 def generate_samples(k,h_spec,J,nu,M,
                      point_generation_method,
-                     delta,lambda_mult,j_scaling,qois,num_spatial_cores,dim=2,display_progress=False):
+                     delta,lambda_mult,j_scaling,
+                     qois,
+                     num_spatial_cores,dim=2,
+                     display_progress=False,physically_realistic=False):
     """Generates samples for Monte-Carlo methods for Helmholtz.
 
     Computes an approximation to the root-mean-squared error in
@@ -81,6 +84,11 @@ def generate_samples(k,h_spec,J,nu,M,
     display_progress - boolean - if true, prints the sample number each
     time we sample.
 
+    physically_realistic - boolean - if true, f and g correspond to a
+    scattered plane wave, n is cut off away from the truncation
+    boundary, and n is >= 0.1. Otherwise, f and g are given by a plane
+    wave. The 'false' option is used to verify regression tests.
+
     Output:
     Warning: MC needs updating for multiple QOIs results - list
     containing 3 items: [k,samples,n_coeffs], where samples is a list
@@ -98,6 +106,7 @@ def generate_samples(k,h_spec,J,nu,M,
     which is as above. n_coeffs is a list of length nu, each entry of
     which is a 2**M by J numpy array, each row of which contains the
     KL-coefficients needed to generate the particular realisation of n.
+
     """
 
     if point_generation_method is 'mc':
@@ -138,12 +147,16 @@ def generate_samples(k,h_spec,J,nu,M,
         k,V,A_stoch=None,n_stoch=kl_like)
 
     angle = np.pi/4.0
+
+    if physically_realistic:
     
-    prob.f_g_scattered_plane_wave([np.cos(angle),np.sin(angle)])
+        prob.f_g_scattered_plane_wave([np.cos(angle),np.sin(angle)])
 
-    prob.sharp_cutoff(np.array((0.5,0.5)),0.75)
+        prob.sharp_cutoff(np.array((0.5,0.5)),0.75)
 
-    prob.n_min(0.1)
+        prob.n_min(0.1)
+    else:
+        prob.f_g_plane_wave([np.cos(angle),np.sin(angle)])
 
     prob.use_mumps()
                 

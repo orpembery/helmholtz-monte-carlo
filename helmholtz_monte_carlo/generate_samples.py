@@ -171,7 +171,7 @@ def generate_samples(k,h_spec,J,nu,M,
                    
         for shift_no in range(nu):
             if display_progress:
-                print(shift_no+1,flush=True)
+                print('Shift number:',shift_no+1,flush=True)
             # Randomly shift the points
             prob.n_stoch.change_all_points(
                 point_gen.shift(kl_mc_points,seed=shift_no))

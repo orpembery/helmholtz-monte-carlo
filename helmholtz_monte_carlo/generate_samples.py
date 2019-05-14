@@ -95,10 +95,11 @@ def generate_samples(k,h_spec,J,nu,M,
     containing all of the samples of the QoI, and n_coeffs is a list
     containing all of the KL-coefficients for each realisation of n.
 
-    If point_generation_method is 'mc', then samples is a list of length
-    num_qois, each entry of which is a numpy array of length nu *
-    (2**M), where each entry is either: (i) a (complex-valued) float, or (ii) a numpy column vector, corresponding
-    to a sample of the QoI.
+    If point_generation_method is 'mc', then samples is a list of
+    length num_qois, each entry of which is a numpy array of length nu
+    * (2**M), where each entry is either: (i) a (complex-valued)
+    float, or (ii) a numpy column vector, corresponding to a sample of
+    the QoI.
 
     If point_generation_method is 'qmc', then samples is a list of
     length nu, where each entry of samples is a list of length num_qois,
@@ -182,7 +183,7 @@ def generate_samples(k,h_spec,J,nu,M,
             # For outputting samples
             samples.append(this_samples)            
 
-    comm = ensemble.ensemble_comm 
+    comm = ensemble.ensemble_comm
 
     samples = fancy_allgather(comm,samples,'samples')
 
@@ -216,24 +217,25 @@ def fancy_allgather(comm,to_gather,gather_type):
     to_gather, but holds the data from all of them.
     """
 
-    # Despite the fact that there will be multiple procs with rank 0, I'm going to assume for now that this all works.
+    # Despite the fact that there will be multiple procs with rank 0,
+    # I'm going to assume for now that this all works.
     gathered_tmp = comm.gather(to_gather,root=0)
 
     gathered = []
     
-    #Whip it all into order
+    # Whip it all into order
     if comm.rank == 0:
         gathered = to_gather
-        for ii_to_gather in range(len(to_gather)):
-            for ii in range(1,comm.size):
-                rec_gathered = gathered_tmp[ii]
+        for ii_nu in range(len(to_gather)):
+            for ii_proc in range(1,comm.size):
+                rec_gathered = gathered_tmp[ii_proc]
 
                 if gather_type is 'samples':
                     for ii_qoi in range(len(to_gather[0])):
-                        gathered[ii_to_gather][ii_qoi] = np.hstack((gathered[ii_to_gather][ii_qoi],rec_gathered[ii_to_gather][ii_qoi]))
+                        gathered[ii_nu][ii_qoi] = np.hstack((gathered[ii_nu][ii_qoi],rec_gathered[ii_nu][ii_qoi]))
                         
                 elif gather_type is 'coeffs':
-                    gathered[ii_to_gather] = np.vstack((gathered[ii_to_gather],rec_gathered[ii_to_gather]))
+                    gathered[ii_nu] = np.vstack((gathered[ii_nu],rec_gathered[ii_nu]))
                     
                 else:
                     raise NotImplementedError
@@ -296,7 +298,6 @@ def all_qoi_samples(prob,qois,comm,display_progress):
                 for ii in this_qoi_findings[1]:
                     samples[ii].append(qoi_eval(prob_input,this_qoi,comm))
 
-
         try:
             prob.sample()
             # Next line is only for testing
@@ -306,7 +307,11 @@ def all_qoi_samples(prob,qois,comm,display_progress):
             prob.n_stoch.reinitialise()
             break
 
-    samples = [np.array(this_samples) for this_samples in samples]
+    # Need to tread carefully for vector-valued QoIs, and do things via numpy
+    if type(samples[0][0]) is np.ndarray:
+        samples = [np.hstack(this_samples) for this_samples in samples]
+    else:
+        samples = [np.array(this_samples) for this_samples in samples]
 
     return samples
 
@@ -390,8 +395,12 @@ def qoi_eval(prob,this_qoi,comm):
             DG_functions[ii].interpolate(gradient[ii])
 
         point = tuple([1.0 for ii in range(len(gradient))])
-            
-        output = np.array([[eval_at_mesh_point(DG_fun,point,comm)] for DG_fun in DG_functions],ndmin=2)
+
+        # A bit funny because output needs to be a column vector
+        #output = np.array([eval_at_mesh_point(DG_fun,point,comm) for DG_fun in DG_functions],ndmin=2).transpose()
+
+        # For now, set the output to be the first component of the gradient
+        output = eval_at_mesh_point(DG_functions[0],point,comm)
 
     else:
         output = None

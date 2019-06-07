@@ -7,6 +7,7 @@ import latticeseq_b2
 from helmholtz_firedrake import coefficients as coeff
 from helmholtz_firedrake import utils
 import pytest
+from copy import deepcopy
 
 def test_mc_points_correct():
     """Tests that Monte Carlo points are in the (centred) unit cube.
@@ -329,3 +330,23 @@ def test_qoi_finder():
     assert not output[0]
 
     assert output[1] == []
+
+def test_lexicographic_ordering():
+    """Tests whether lexicographic ordering works."""
+
+    points = point_gen.mc_points(20,2**5,'qmc',[0,1],seed=None,
+                                 order_lexicographically=True)
+
+    points_ordering = np.lexsort(points.transpose())
+
+    print(points_ordering,flush=True)
+    
+    points_ordered = deepcopy(points_ordering)
+
+    points_ordered.sort()
+
+    print(points_ordered,flush=True)
+    
+    assert (points_ordering == points_ordered).all()
+
+    

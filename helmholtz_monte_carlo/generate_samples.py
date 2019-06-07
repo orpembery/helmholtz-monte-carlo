@@ -38,7 +38,7 @@ def generate_samples(k,h_spec,J,nu,M,
     randomly-shifted QMC methods. Combiones with M to give number of
     integration points for Monte Carlo.
 
-    M - positive ints - Specifies the number of integration points for
+    M - positive int - Specifies the number of integration points for
     which to do computations - NOTE: for Monte Carlo, the number of
     integration points will be given by nu*(2**M). For Quasi-Monte
     Carlo, we will sample 2**m integration points, and then randomly
@@ -107,7 +107,6 @@ def generate_samples(k,h_spec,J,nu,M,
     which is as above. n_coeffs is a list of length nu, each entry of
     which is a 2**M by J numpy array, each row of which contains the
     KL-coefficients needed to generate the particular realisation of n.
-
     """
 
     if point_generation_method is 'mc':
@@ -127,7 +126,8 @@ def generate_samples(k,h_spec,J,nu,M,
     n_coeffs = []
         
     if point_generation_method is 'mc':
-        # This needs updating one I've figured out a way to do seeding in a parallel-appropriate way !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
+        # This needs updating one I've figured out a way to do seeding
+        # in a parallel-appropriate way
         N = nu*(2**M)
         kl_mc_points = point_gen.mc_points(
             J,N,point_generation_method,seed=1)

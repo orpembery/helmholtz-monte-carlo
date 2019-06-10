@@ -7,13 +7,17 @@ import firedrake as fd
 import numpy as np
 import warnings
 from copy import deepcopy
+from scipy import optimize
 
 def generate_samples(k,h_spec,J,nu,M,
                      point_generation_method,
                      delta,lambda_mult,j_scaling,
                      qois,
                      num_spatial_cores,dim=2,
-                     display_progress=False,physically_realistic=False):
+                     display_progress=False,physically_realistic=False,
+                     nearby_preconditioning=False,
+                     nearby_preconditioning_proportion=1):
+    
     """Generates samples for Monte-Carlo methods for Helmholtz.
 
     Computes an approximation to the root-mean-squared error in
@@ -35,7 +39,7 @@ def generate_samples(k,h_spec,J,nu,M,
     expansion for which to do experiments.
 
     nu - positive int - the number of random shifts to use in
-    randomly-shifted QMC methods. Combiones with M to give number of
+    randomly-shifted QMC methods. Combines with M to give number of
     integration points for Monte Carlo.
 
     M - positive int - Specifies the number of integration points for
@@ -44,10 +48,10 @@ def generate_samples(k,h_spec,J,nu,M,
     Carlo, we will sample 2**m integration points, and then randomly
     shift these nu times as part of the estimator.
 
-    point_generation_method - either 'qmc' or 'mc'. 'qmc' means a QMC
-    lattice rule is used to generate the points, whereas 'mc' means the
-    points are randomly generated according to a uniform distribution on
-    the unit cube.
+    point_generation_method string - either 'mc' or 'qmc', specifying
+    Monte-Carlo point generation or Quasi-Monte-Carlo (based on an
+    off-the-shelf lattice rule). Monte-Carlo generation currently
+    doesn't work, and so throws an error.
 
     delta - parameter controlling the rate of decay of the magntiude of
     the coefficients in the artifical-KL expansion - see
@@ -58,6 +62,7 @@ def generate_samples(k,h_spec,J,nu,M,
     coefficients in the artifical-KL expansion - see
     helmholtz_firedrake.coefficients.UniformKLLikeCoeff for more
     information.
+
 
     j_scaling - parameter controlling the oscillation in the basis
     functions in the artifical-KL expansion - see
@@ -89,28 +94,34 @@ def generate_samples(k,h_spec,J,nu,M,
     boundary, and n is >= 0.1. Otherwise, f and g are given by a plane
     wave. The 'false' option is used to verify regression tests.
 
+    nearby_preconditioning - boolean - if true, nearby preconditioning
+    is used in the solves. A proportion (given by nearby_preconditioning
+    proportion) of the realisations have their exact LU decompositions
+    computed, and then these are used as preconditioners for all the
+    other problems (where the preconditioner used is determined by the
+    nearest problem, in some metric, that has had a preconditioner
+    computed). Note that if ensembles are used to speed up the solution
+    time, some LU decompositions may be calculated more than once. But
+    for the purposes of assessing the effectiveness of the algorithm (in
+    terms of total # GMRES iterations), this isn't a problem.
+
+    nearby_preconditioning_proportion - float in [0,1]. See the text for
+    nearby_preconditioning above.
+
     Output:
-    Warning: MC needs updating for multiple QOIs results - list
-    containing 3 items: [k,samples,n_coeffs], where samples is a list
-    containing all of the samples of the QoI, and n_coeffs is a list
-    containing all of the KL-coefficients for each realisation of n.
-
-    If point_generation_method is 'mc', then samples is a list of
-    length num_qois, each entry of which is a numpy array of length nu
-    * (2**M), where each entry is either: (i) a (complex-valued)
-    float, or (ii) a numpy column vector, corresponding to a sample of
-    the QoI.
-
     If point_generation_method is 'qmc', then samples is a list of
     length nu, where each entry of samples is a list of length num_qois,
     each entry of which is a numpy array of length 2**M, each entry of
-    which is as above. n_coeffs is a list of length nu, each entry of
+    which is either: (i) a (complex-valued)
+    float, or (ii) a numpy column vector, corresponding to a sample of
+    the QoI.. n_coeffs is a list of length nu, each entry of
     which is a 2**M by J numpy array, each row of which contains the
     KL-coefficients needed to generate the particular realisation of n.
+
     """
 
     if point_generation_method is 'mc':
-        warnings.warn("Monte Carlo sampling currently doesn't work",Warning)
+        raise NotImplementedError("Monte Carlo sampling currently doesn't work")
         
     num_qois = len(qois)
     
@@ -136,12 +147,12 @@ def generate_samples(k,h_spec,J,nu,M,
         N = 2**M
         kl_mc_points = point_gen.mc_points(
             J,N,point_generation_method,section=[comm.rank,comm.size],seed=1)
-        
-    n_0 = 1.0
-                
-    kl_like = coeff.UniformKLLikeCoeff(
-        mesh,J,delta,lambda_mult,j_scaling,n_0,kl_mc_points)
 
+    n_0 = 1.0
+
+    kl_like = coeff.UniformKLLikeCoeff(
+        mesh,J,delta,lambda_mult,j_scaling,n_0,kl_mc_points)       
+        
     # Create the problem
     V = fd.FunctionSpace(mesh,"CG",1)
     prob = hh.StochasticHelmholtzProblem(
@@ -168,6 +179,8 @@ def generate_samples(k,h_spec,J,nu,M,
     elif point_generation_method == 'qmc':
 
         samples = []
+
+        GMRES_its = []
                    
         for shift_no in range(nu):
             if display_progress:
@@ -177,19 +190,33 @@ def generate_samples(k,h_spec,J,nu,M,
                 point_gen.shift(kl_mc_points,seed=shift_no))
 
             n_coeffs.append(deepcopy(prob.n_stoch.current_and_unsampled_points()))
-            
-            this_samples = all_qoi_samples(prob,qois,ensemble.comm,display_progress)
 
-            # For outputting samples
-            samples.append(this_samples)            
+            if nearby_preconditioning:
+                [centres,nearest_centre] = find_nbpc_points(M,nearby_preconditioning_proportion,prob.n_stoch,J,point_generation_method,prob.n_stoch.current_and_unsampled_points())
+            else:
+                centres = None
+                nearest_centre = None
+            
+            [this_samples,this_GMRES_its] = all_qoi_samples(prob,qois,ensemble.comm,display_progress,centres,nearest_centre,J,delta,lambda_mult,j_scaling,n_0)
+            # Will presumably need to pass into here a list of the
+            # coordinates of the 'centres' and a list of which center
+            # to use for each sample
+
+
+            # For outputting samples and GMRES iterations
+            samples.append(this_samples)
+            GMRES_its.append(this_GMRES_its)
+            
 
     comm = ensemble.ensemble_comm
 
     samples = fancy_allgather(comm,samples,'samples')
 
     n_coeffs = fancy_allgather(comm,n_coeffs,'coeffs')
+
+    GMRES_its = fancy_allgather(comm,GMRES_its,'coeffs')
     
-    return [k,samples,n_coeffs]
+    return [k,samples,n_coeffs,GMRES_its]
 
 def fancy_allgather(comm,to_gather,gather_type):
     """Effectively does an allgather, but for the kind of list we're
@@ -246,7 +273,7 @@ def fancy_allgather(comm,to_gather,gather_type):
     return gathered
                     
 
-def all_qoi_samples(prob,qois,comm,display_progress):
+def all_qoi_samples(prob,qois,comm,display_progress,centres,nearest_centre,J,delta,lambda_mult,j_scaling,n_0):
     """Computes all samples of the qoi for a StochasticHelmholtzProblem.
 
     This is a helper function for investigate_error.
@@ -262,26 +289,57 @@ def all_qoi_samples(prob,qois,comm,display_progress):
     display_progress - boolean - if true, prints the sample number each
     time we sample.
 
+    centres - a list of numpy arrays of length J. The points at which we
+    calculate the preconditioners for nearby preconditioning. If no
+    preconditioning is used, None.
+
+    nearest_centre - a list of ints of length 'number of qmc
+    calculations to do on this ensemble member' - gives the 'centre'
+    nearest to the corresponding sample.
+
     Outputs:
 
     samples - list of numpy arrays containing the values of each qoi for
     each realisation. samples[ii] corresponds to qois[ii].
 
-    """
+    GMRES_its - list of ints, giving the number of GMRES iterations for
+    each sample. If no GMRES was used, None.
+
+   """
+    # TODO: Update documentation here
+    nearby_preconditioning = centres is not None
     num_qois = len(qois)
+
+    GMRES_its = []
     
     samples = [[] for ii in range(num_qois)]
 
     # For testing purposes
     dummy = 1.0
 
+    if nearby_preconditioning:
+        # Order points with respect to the preconditioner that is used
+        new_order = np.argsort(nearest_centre)
+        prob.n_stoch.change_all_points(prob.n_stoch.current_and_unsampled_points()[new_order])
+        nearest_centre = nearest_centre[new_order]
+        current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[0]])
+        
     sample_no = 0
+
+    ii_centre = 0
     while True:
+        if nearby_preconditioning and (centres[ii_centre] != current_centre).any():
+                current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[0]])
+                ii_centre += 1
         sample_no += 1
+
         if display_progress:
             print(sample_no,flush=True)
-            
+                  
         prob.solve()
+
+        if nearby_preconditioning:
+            GMRES_its.append(prob.GMRES_its)
 
         # Using 'set' below means we only tackle each qoi once.
         for this_qoi in sorted(set(qois)):
@@ -313,7 +371,10 @@ def all_qoi_samples(prob,qois,comm,display_progress):
     else:
         samples = [np.array(this_samples) for this_samples in samples]
 
-    return samples
+    if len(GMRES_its) == 0:
+        GMRES_its = None
+        
+    return [samples,GMRES_its]
 
 def qoi_finder(qois,this_qoi):
     """Helper function that finds this_qoi in qois.
@@ -455,3 +516,122 @@ def eval_at_mesh_point(v,point,comm):
     v.dat.data[:] = data_tmp
     
     return v.vector().gather()[loc][0]
+
+def weighted_L1_norm(point,array,sqrt_lambda):
+    """Calculates the weighted L^1 norms between point and array, weighted by
+    sqrt_lambda.
+
+    Point is a single vector
+
+    Array is an array of vectors stacked on top of each other
+
+    Output - column vector containing the norms.
+    """
+    return np.linalg.norm((point-array)*sqrt_lambda,ord=1,axis=1)
+
+def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generation_method,this_ensemble_points):
+    """Finds the points to use as 'centres' for nearby preconditioning, and
+    calculates which 'centre' corresponds to each qmc point.
+    """
+    # Points are generated here, so this is presumably the place to do
+    # all the 'figuring out the centres' business.  We distribute the
+    # points at the centres of the 'preconditioning balls' using a
+    # tensor product grid.  Suppose we knew the radius of these balls
+    # (in a weighted L^1-metric) should be r. Then the spacing of the
+    # points in dimension j should be
+    # \[d_j = r / (J * \sqrt{lambda_j})\]
+    # (where the sqrt(lambda_j) are as in
+    # helmholtz_firedrake.coefficients.UniformKLLikeCoeff). In order to
+    # achieve this spacing, we would need \ceil(1/d_j) points in
+    # dimension j. However, we know the number of points, and we reverse
+    # engineer the above argument to get the radius of the balls, and
+    # the spacing in each dimension. Suppose for simplicity (and because
+    # there will be various other fudges and approximations in what
+    # follows) that we have 1/d_j points in each dimension. Then the
+    # total number of points is $r^{-J} \prod_{j=1}^J J
+    # \sqrt{\lambda_j}.$ If we specify that the total number of
+    # 'centres' is N_C, then we have
+    # \[r = J(\prod_{j=1}^J\sqrt{\lambda_j})^{-J}\],
+    # and thence we can determine d_j, and lay down equispaced points in
+    # dimension j with this spacing. We then assemble the points in all
+    # of stochastic space via tensor products. We then find the actual
+    # 'centres' by selecting the QMC points that are nearest to these
+    # 'ideal' centres. We then associated each and every QMC point with
+    # a 'centre' by selecting the closest 'centre'.
+
+    N = 2**M
+    
+    num_centres = round(N*nearby_preconditioning_proportion)   
+
+    sqrt_lambda = kl_like._sqrt_lambda
+    # Check this is a row vector
+
+    #TODO - tidy this documentation
+    # We do a bit of a hack to generate the distribution of the centres
+    # in the different dimensions We write a function that assumes we
+    # know the radius $r$ of the balls (in the funny metric), that we
+    # want, and then gives us the number of points in each dimension
+    # (well, not quite, because at this point the 'numbers of points'
+    # are not necessarily integers). We then optimise this function
+    # (it's nonlinear and nonsmooth) to find the (a?) value of $r$ that
+    # gives the correct number of centres. We then round all the decimal
+    # numbers to get a number of points that (we hope) isn't too far
+    # off.
+    # The reason why this is the right function to optimise, I'll write in later
+
+    def continuous_centre_nums(r):
+        return np.array([np.max((1.0,ii)) for ii in (float(J)*sqrt_lambda)/(2.0*r)])
+
+    def optim_fn(r):
+        return continuous_centre_nums(r).prod()-float(num_centres)
+
+    out = optimize.bisect(optim_fn,0.1,float(J))
+
+    centre_nums = np.round(continuous_centre_nums(out))
+    # A better way to do this would be to find the closest point on the integer lattice, but I've no idea how easy/hard that is....
+    
+    one_d_points = [-0.5+np.linspace(1.0/(jj+1.0),jj/(jj+1.0),int(jj)) for jj in centre_nums]
+
+    centres_meshgrid = np.meshgrid(*one_d_points)
+
+    proposed_centres = np.vstack([coord.flatten() for coord in centres_meshgrid]).transpose()
+
+    # Now to actually locate the centres at QMC points
+    all_qmc_points = point_gen.mc_points(
+        J,N,point_generation_method,section=[0,1],seed=1)
+
+    centres = []
+
+    for proposed in proposed_centres:
+        nearest_point = np.argmin(weighted_L1_norm(proposed,all_qmc_points,sqrt_lambda))
+
+        centres.append(all_qmc_points[nearest_point,:])
+
+    centres = np.vstack(centres)
+
+    actual_num_centres = centres.shape[0]
+
+    # Now find out, for each QMC point in this ensemble member, which
+    # centre is nearest to it
+
+    num_points_this_ensemble = this_ensemble_points.shape[0]
+
+    nearest_centre = -np.ones(num_points_this_ensemble,dtype='int')
+
+    for ii_point in range(num_points_this_ensemble):
+        point = this_ensemble_points[ii_point,:]
+
+        nearest_centre[ii_point] = np.argmin(weighted_L1_norm(point,centres,sqrt_lambda))
+
+    # Check we've actually assigned a centre to each point
+    assert (nearest_centre >= 0).all()
+
+    return [centres,nearest_centre]
+
+def update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,new_centre):
+    """Update the preconditioner."""
+    # Modified from the function update_pc in
+    # helmholtz_nearby_preconditioning.
+    n_pre_instance = coeff.UniformKLLikeCoeff(prob.V.mesh(),J,delta,lambda_mult,j_scaling,
+                                              n_0,np.array(new_centre,ndmin=2)) # min 2 dimensions?
+    return new_centre

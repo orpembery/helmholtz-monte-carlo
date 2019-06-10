@@ -156,7 +156,8 @@ def generate_samples(k,h_spec,J,nu,M,
     # Create the problem
     V = fd.FunctionSpace(mesh,"CG",1)
     prob = hh.StochasticHelmholtzProblem(
-        k,V,A_stoch=None,n_stoch=kl_like)
+        k,V,A_stoch=None,n_stoch=kl_like,
+        **{'A_pre' : fd.as_matrix([[1.0,0.0],[0.0,1.0]])})
 
     angle = np.pi/4.0
 
@@ -194,7 +195,8 @@ def generate_samples(k,h_spec,J,nu,M,
             if nearby_preconditioning:
                 [centres,nearest_centre] = find_nbpc_points(M,nearby_preconditioning_proportion,
                                                             prob.n_stoch,J,point_generation_method,
-                                                            prob.n_stoch.current_and_unsampled_points())
+                                                            prob.n_stoch.current_and_unsampled_points(),
+                                                            shift_no)
 
             else:
                 centres = None
@@ -217,7 +219,7 @@ def generate_samples(k,h_spec,J,nu,M,
 
     GMRES_its = fancy_allgather(comm,GMRES_its,'coeffs')
 
-    return [k,samples,n_coeffs,GMRES_its]
+    return [k,samples,n_coeffs,GMRES_its,]
 
 def fancy_allgather(comm,to_gather,gather_type):
     """Effectively does an allgather, but for the kind of list we're
@@ -317,29 +319,27 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=
 
     # For testing purposes
     dummy = 1.0
-
+    
     if nearby_preconditioning:
-        prob.use_gmres()
         # Order points with respect to the preconditioner that is used
         new_order = np.argsort(nearest_centre)
         prob.n_stoch.change_all_points(prob.n_stoch.current_and_unsampled_points()[new_order])
         nearest_centre = nearest_centre[new_order]
         current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[0]])
-        
+        prob.use_gmres()
     sample_no = 0
 
     ii_centre = 0
     while True:
-        if nearby_preconditioning and (centres[ii_centre] != current_centre).any():
-                current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[0]])
-                ii_centre += 1
+        if nearby_preconditioning and (nearest_centre[ii_centre] != current_centre).any():
+                current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[ii_centre]])
+
         sample_no += 1
 
         if display_progress:
             print(sample_no,flush=True)
-                  
+
         prob.solve()
-        print(prob.GMRES_its)
 
         if nearby_preconditioning:
             GMRES_its.append(prob.GMRES_its)
@@ -364,6 +364,7 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=
             prob.sample()
             # Next line is only for testing
             dummy += 1.0
+            ii_centre += 1
         # Get a SamplingError when there are no more realisations
         except SamplingError:
             prob.n_stoch.reinitialise()
@@ -533,7 +534,7 @@ def weighted_L1_norm(point,array,sqrt_lambda):
     """
     return np.linalg.norm((point-array)*sqrt_lambda,ord=1,axis=1)
 
-def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generation_method,this_ensemble_points):
+def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generation_method,this_ensemble_points,shift_no):
     """Finds the points to use as 'centres' for nearby preconditioning, and
     calculates which 'centre' corresponds to each qmc point.
     """
@@ -570,6 +571,9 @@ def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generat
     sqrt_lambda = kl_like._sqrt_lambda
     # Check this is a row vector
 
+    # We distribute the number of points at which to construct the
+    # preconditioners according to the decay of 1+sqrt(lambda_j).
+    
     #TODO - tidy this documentation We do a bit of a hack to generate
     # the distribution of the centres in the different dimensions. We
     # write a function that assumes we know the radius $r$ of the
@@ -601,12 +605,9 @@ def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generat
     
     out = optimize.bisect(optim_fn,lower_bound,upper_bound)
 
-    import pdb; pdb.set_trace()
     
     centre_nums = np.round(continuous_centre_nums(out))
-    # A better way to do this would be to find the closest point on the integer lattice, but I've no idea how easy/hard that is....
-
-
+    # A better way to do this would be to find the closest point on the integer lattice - not even this, but I've no idea how easy/hard that is....
     
     one_d_points = [-0.5+np.linspace(1.0/(jj+1.0),jj/(jj+1.0),int(jj)) for jj in centre_nums]
 
@@ -618,6 +619,11 @@ def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generat
     all_qmc_points = point_gen.mc_points(
         J,N,point_generation_method,section=[0,1],seed=1)
 
+    for ii_shift in range(shift_no+1):
+        # Needed because the outer code iteratively shifts the qmc
+        # points around
+        all_qmc_points = point_gen.shift(all_qmc_points,seed=shift_no)
+
     centres = []
 
     for proposed in proposed_centres:
@@ -625,8 +631,9 @@ def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generat
 
         centres.append(all_qmc_points[nearest_point,:])
 
+    # N.B., there is no guard against a point being selected twice
     centres = np.vstack(centres)
-
+    
     actual_num_centres = centres.shape[0]
 
     # Now find out, for each QMC point in this ensemble member, which
@@ -643,7 +650,7 @@ def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generat
 
     # Check we've actually assigned a centre to each point
     assert (nearest_centre >= 0).all()
-
+    
     return [centres,nearest_centre]
 
 def update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,new_centre):
@@ -651,5 +658,8 @@ def update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,new_centre):
     # Modified from the function update_pc in
     # helmholtz_nearby_preconditioning.
     n_pre_instance = coeff.UniformKLLikeCoeff(prob.V.mesh(),J,delta,lambda_mult,j_scaling,
-                                              n_0,np.array(new_centre,ndmin=2)) # min 2 dimensions?
+                                              n_0,np.array(new_centre,ndmin=2))
+
+    prob.set_n_pre(n_pre_instance.coeff)
+    print('UPDATED!',flush=True)
     return new_centre

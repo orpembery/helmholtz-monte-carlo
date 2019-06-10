@@ -124,9 +124,10 @@ def test_all_qoi_samples():
     prob.use_mumps()
 
     samples = gen_samples.all_qoi_samples(prob,['testing'],fd.COMM_WORLD,False)
-    assert len(samples) == 1
+    assert len(samples) == 2
     assert np.allclose(samples[0],np.arange(1.0,float(num_points)+1.0))
-
+    assert samples[1] is None
+    
 @pytest.mark.xfail
 def test_mc_sample_generation():
     k = 1.0
@@ -348,36 +349,3 @@ def test_lexicographic_ordering():
     print(points_ordered,flush=True)
     
     assert (points_ordering == points_ordered).all()
-
-    
-def test_nbpc_qmc():
-    """Checks that QMC + nearby preconditioning doesn't crash."""
-
-    k = 1.0
-
-    h_spec = (1.0,-1.5)
-
-    J = 2
-
-    nu=1
-
-    M = 6
-
-    point_generation_method = 'qmc'
-
-    delta = 2.0
-
-    lambda_mult = 1.0
-
-    j_scaling = 1.0
-    
-    num_spatial_cores = 1
-    
-    # This is just testing that we correctly handle multiple qois
-    qois = ['integral']
-    
-
-    output = gen_samples.generate_samples(k,h_spec,J,nu,M,
-                                          point_generation_method,
-                                          delta,lambda_mult,j_scaling,qois,
-                                          num_spatial_cores,dim=2,nearby_preconditioning=True,nearby_preconditioning_proportion=0.1)

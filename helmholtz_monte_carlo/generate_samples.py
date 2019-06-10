@@ -198,10 +198,6 @@ def generate_samples(k,h_spec,J,nu,M,
                 nearest_centre = None
             
             [this_samples,this_GMRES_its] = all_qoi_samples(prob,qois,ensemble.comm,display_progress,centres,nearest_centre,J,delta,lambda_mult,j_scaling,n_0)
-            # Will presumably need to pass into here a list of the
-            # coordinates of the 'centres' and a list of which center
-            # to use for each sample
-
 
             # For outputting samples and GMRES iterations
             samples.append(this_samples)
@@ -273,7 +269,7 @@ def fancy_allgather(comm,to_gather,gather_type):
     return gathered
                     
 
-def all_qoi_samples(prob,qois,comm,display_progress,centres,nearest_centre,J,delta,lambda_mult,j_scaling,n_0):
+def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=None,J=None,delta=None,lambda_mult=None,j_scaling=None,n_0=None):
     """Computes all samples of the qoi for a StochasticHelmholtzProblem.
 
     This is a helper function for investigate_error.

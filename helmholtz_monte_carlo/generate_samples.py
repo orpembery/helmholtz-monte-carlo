@@ -117,9 +117,8 @@ def generate_samples(k,h_spec,J,nu,M,
     the QoI.. n_coeffs is a list of length nu, each entry of
     which is a 2**M by J numpy array, each row of which contains the
     KL-coefficients needed to generate the particular realisation of n.
-
     """
-
+    
     if point_generation_method is 'mc':
         raise NotImplementedError("Monte Carlo sampling currently doesn't work")
         
@@ -323,6 +322,7 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=
     if nearby_preconditioning:
         # Order points with respect to the preconditioner that is used
         new_order = np.argsort(nearest_centre)
+        old_order = np.argsort(new_order)
         prob.n_stoch.change_all_points(prob.n_stoch.current_and_unsampled_points()[new_order])
         nearest_centre = nearest_centre[new_order]
         current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[0]])
@@ -378,6 +378,15 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=
 
     if len(GMRES_its) == 0:
         GMRES_its = None
+
+    # Now need to order the samples so that they're back in their
+    # original ordering
+
+    if nearby_preconditioning:
+    
+        GMRES_its = np.array(GMRES_its)[old_order].tolist()
+
+        samples = [qoi[old_order] for qoi in samples]
         
     return [samples,GMRES_its]
 

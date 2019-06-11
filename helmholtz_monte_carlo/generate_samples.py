@@ -331,8 +331,8 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=
 
     ii_centre = 0
     while True:
-        if nearby_preconditioning and (nearest_centre[ii_centre] != current_centre).any():
-                current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[ii_centre]])
+        if nearby_preconditioning and (centres[nearest_centre[ii_centre]] != current_centre).any():
+            current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[ii_centre]])
 
         sample_no += 1
 
@@ -670,5 +670,4 @@ def update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,new_centre):
                                               n_0,np.array(new_centre,ndmin=2))
 
     prob.set_n_pre(n_pre_instance.coeff)
-    print('UPDATED!',flush=True)
     return new_centre

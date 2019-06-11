@@ -42,7 +42,7 @@ def test_serial_code():
             #assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
             pass
 
-        for ii in range(1,len(qmc_out)):
+        for ii in range(1,len(qmc_out)-1):
             assert(len(old_out[ii])==len(qmc_out[ii]))
             for jj in range(len(qmc_out[1])):
                 # Commented out here for same reason as above
@@ -50,3 +50,7 @@ def test_serial_code():
                 #assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
                 assert np.all(np.isclose(qmc_out[ii][jj],old_out[ii][jj]))
 
+
+        # Final list (of GMRES its) is all Nones
+        for jj in range(len(qmc_out[-1])):
+            assert qmc_out[-1][jj] == old_out[-1][jj]

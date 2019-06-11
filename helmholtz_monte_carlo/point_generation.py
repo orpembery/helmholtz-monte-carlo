@@ -3,7 +3,8 @@ import latticeseq_b2
 from warnings import warn
 from copy import deepcopy
 
-def mc_points(J,N,point_generation_method,section,seed=None):
+def mc_points(J,N,point_generation_method,section,seed=None,
+              order_lexicographically=False):
         """Generates either Monte-Carlo or Quasi-Monte-Carlo integration
         points on the multi-dimensional [-1/2,1/2] cube.
 
@@ -31,10 +32,15 @@ def mc_points(J,N,point_generation_method,section,seed=None):
         points. If seed is None, then no seed is set, and the underlying
         random number generator is used.
 
+        order_lexicographically - qmc points are ordered
+        lexicographically, rather than as they are outputted from the
+        underlying generation code.
+
         Outputs:
 
         points - N x J numpy array, where each row is the coordinates
         of an integration point.
+
         """
         if point_generation_method is 'qmc':
 
@@ -62,6 +68,9 @@ def mc_points(J,N,point_generation_method,section,seed=None):
             set_numpy_seed(seed)
             points = np.random.rand(N,J)
 
+        if order_lexicographically:
+                points = points[np.lexsort(points.transpose())]
+            
         points -= 0.5
 
         # pps = points per section

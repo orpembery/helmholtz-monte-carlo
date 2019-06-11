@@ -216,8 +216,18 @@ def generate_samples(k,h_spec,J,nu,M,
 
     n_coeffs = fancy_allgather(comm,n_coeffs,'coeffs')
 
-    GMRES_its = fancy_allgather(comm,GMRES_its,'coeffs')
+    # Have to hack around GMRES_its because it's not *quite* in the
+    # right format
 
+# list of list of Nones or Floats
+# But if we don't use NBPC, then it's a list of Nones
+    
+    GMRES_its = [[np.array(ii)] for ii in GMRES_its]
+    
+    GMRES_its = fancy_allgather(comm,GMRES_its,'samples')
+
+    GMRES_its = [ii[0].tolist() for ii in GMRES_its]
+    
     return [k,samples,n_coeffs,GMRES_its,]
 
 def fancy_allgather(comm,to_gather,gather_type):

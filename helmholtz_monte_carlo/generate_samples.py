@@ -109,14 +109,24 @@ def generate_samples(k,h_spec,J,nu,M,
     nearby_preconditioning above.
 
     Output:
-    If point_generation_method is 'qmc', then samples is a list of
-    length nu, where each entry of samples is a list of length num_qois,
-    each entry of which is a numpy array of length 2**M, each entry of
-    which is either: (i) a (complex-valued)
+    If point_generation_method is 'qmc', then 
+    output is a list: [k,samples,n_coeffs,GMRES_its,]
+
+    k is a float - the wavenumber.
+
+    samples is a list of length nu, where each entry of samples is a
+    list of length num_qois, each entry of which is a numpy array of
+    length 2**M, each entry of which is either: (i) a (complex-valued)
     float, or (ii) a numpy column vector, corresponding to a sample of
-    the QoI.. n_coeffs is a list of length nu, each entry of
-    which is a 2**M by J numpy array, each row of which contains the
-    KL-coefficients needed to generate the particular realisation of n.
+    the QoI.
+
+    n_coeffs is a list of length nu, each entry of which is a 2**M by J
+    numpy array, each row of which contains the KL-coefficients needed
+    to generate the particular realisation of n.
+
+    GMRES_its is a list of length nu, each entry of which is a list of
+    length 2**M, containing ints - these are the number of GMRES
+    iterations required for each sample.
     """
     
     if point_generation_method is 'mc':

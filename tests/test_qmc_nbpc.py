@@ -202,11 +202,11 @@ def test_every_point_a_preconditioner_realistic():
 
     h_spec = (1.0,-1.5)
 
-    J = 4
+    J = 1#4
 
     nu = 1
 
-    M = 5
+    M = 2#5
 
     point_generation_method = 'qmc'
 
@@ -231,7 +231,7 @@ def test_every_point_a_preconditioner_realistic():
 
     # This is a hack to ensure that every point is selected - if you put this as 1.0, then because of how we select the preconditioning points, not every point is selected.
     nearby_preconditioning_proportion = 3.0
-
+    
     output = gen_samples.generate_samples(k,h_spec,J,nu,M,
                                           point_generation_method,
                                           delta,lambda_mult,j_scaling,qois,

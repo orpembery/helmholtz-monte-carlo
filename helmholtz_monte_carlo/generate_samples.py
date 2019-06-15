@@ -169,18 +169,12 @@ def generate_samples(k,h_spec,J,nu,M,
         **{'A_pre' : fd.as_matrix([[1.0,0.0],[0.0,1.0]])})
 
     angle = np.pi/4.0
-
-    if physically_realistic:
     
-        prob.f_g_scattered_plane_wave([np.cos(angle),np.sin(angle)])
+    if physically_realistic:
 
-        prob.sharp_cutoff(np.array((0.5,0.5)),0.75)
-
-        prob.n_min(0.1)
+       make_physically_realistic(prob,angle)
     else:
         prob.f_g_plane_wave([np.cos(angle),np.sin(angle)])
-
-    prob.use_mumps()
                 
     if point_generation_method is 'mc':
 
@@ -206,14 +200,16 @@ def generate_samples(k,h_spec,J,nu,M,
                                                             prob.n_stoch,J,point_generation_method,
                                                             prob.n_stoch.current_and_unsampled_points(),
                                                             shift_no)
-
+                # For debugging
+                print('Number of centres',len(centres))
+                print('Nearest centre for each point',nearest_centre)
             else:
                 centres = None
                 nearest_centre = None
 
             [this_samples,this_GMRES_its] = all_qoi_samples(prob,qois,ensemble.comm,display_progress,
                                                             centres,nearest_centre,J,delta,lambda_mult,
-                                                            j_scaling,n_0)
+                                                            j_scaling,n_0,angle,physically_realistic)
             
             # For outputting samples and GMRES iterations
             samples.append(this_samples)
@@ -295,7 +291,10 @@ def fancy_allgather(comm,to_gather,gather_type):
     return gathered
                     
 
-def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=None,J=None,delta=None,lambda_mult=None,j_scaling=None,n_0=None):
+def all_qoi_samples(prob,qois,comm,display_progress,centres=None,
+                    nearest_centre=None,J=None,delta=None,lambda_mult=None,
+                    j_scaling=None,n_0=None,angle=None,
+                    physically_realistic=False):
     """Computes all samples of the qoi for a StochasticHelmholtzProblem.
 
     This is a helper function for investigate_error.
@@ -327,7 +326,7 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=
     GMRES_its - list of ints, giving the number of GMRES iterations for
     each sample. If no GMRES was used, None.
 
-   """
+   """   
     # TODO: Update documentation here
     nearby_preconditioning = (centres is not None)
     num_qois = len(qois)
@@ -338,21 +337,33 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=
 
     # For testing purposes
     dummy = 1.0
+
+    print('physically realistic',physically_realistic)
     
     if nearby_preconditioning:
         # Order points with respect to the preconditioner that is used
         new_order = np.argsort(nearest_centre)
         old_order = np.argsort(new_order)
-        prob.n_stoch.change_all_points(prob.n_stoch.current_and_unsampled_points()[new_order])
+        prob.n_stoch.change_all_points(
+            prob.n_stoch.current_and_unsampled_points()[new_order])
         nearest_centre = nearest_centre[new_order]
-        current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[0]])
+        current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,
+                                       centres[nearest_centre[0]],angle,
+                                       physically_realistic)
         prob.use_gmres()
+    else:
+        prob.use_mumps()
+        
     sample_no = 0
 
     ii_centre = 0
     while True:
-        if nearby_preconditioning and (centres[nearest_centre[ii_centre]] != current_centre).any():
-            current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,centres[nearest_centre[ii_centre]])
+        if nearby_preconditioning and\
+           (centres[nearest_centre[ii_centre]] != current_centre).any():
+            current_centre = update_centre(prob,J,delta,lambda_mult,j_scaling,
+                                           n_0,
+                                           centres[nearest_centre[ii_centre]],
+                                           angle,physically_realistic)
 
         sample_no += 1
 
@@ -360,7 +371,8 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,nearest_centre=
             print(sample_no,flush=True)
 
         prob.solve()
-
+        print('GMRES',prob.GMRES_its)
+        
         if nearby_preconditioning:
             GMRES_its.append(prob.GMRES_its)
 
@@ -592,7 +604,7 @@ def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generat
     # 'centres' by selecting the QMC points that are nearest to these
     # 'ideal' centres. We then associated each and every QMC point with
     # a 'centre' by selecting the closest 'centre'.
-
+    
     N = 2**M
     
     num_centres = round(N*nearby_preconditioning_proportion)   
@@ -654,13 +666,21 @@ def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generat
         all_qmc_points = point_gen.shift(all_qmc_points,seed=shift_no)
 
     centres = []
-
+    
     for proposed in proposed_centres:
         nearest_point = np.argmin(weighted_L1_norm(proposed,all_qmc_points,sqrt_lambda))
 
-        centres.append(all_qmc_points[nearest_point,:])
+        potential_centre = all_qmc_points[nearest_point,:]
 
-    # N.B., there is no guard against a point being selected twice
+        # We guard against a centre being selected twice
+        skip = False
+        for other_centre in centres:
+            if np.isclose(potential_centre,other_centre).all():
+                skip = True
+                
+        if not skip:
+            centres.append(potential_centre)
+
     centres = np.vstack(centres)
     
     actual_num_centres = centres.shape[0]
@@ -682,12 +702,33 @@ def find_nbpc_points(M,nearby_preconditioning_proportion,kl_like,J,point_generat
     
     return [centres,nearest_centre]
 
-def update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,new_centre):
+def update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,new_centre,angle,physically_realistic):
     """Update the preconditioner."""
     # Modified from the function update_pc in
     # helmholtz_nearby_preconditioning.
     n_pre_instance = coeff.UniformKLLikeCoeff(prob.V.mesh(),J,delta,lambda_mult,j_scaling,
                                               n_0,np.array(new_centre,ndmin=2))
+    # Instead of this, do you instead want to update the coefficients in the preconditioner?
+    # But from convos with Lawrence, I'm not sure that works
+    # The easiest thing right now is to create a separate physically_realistic method and just apply that every time in here.
+    # That'll be fine.
 
+    # But not now
     prob.set_n_pre(n_pre_instance.coeff)
+
+    if physically_realistic:
+        print('AWOOGA!')
+        make_physically_realistic(prob,angle,apply_to_preconditioner=True)
     return new_centre
+
+def make_physically_realistic(prob,angle,apply_to_preconditioner=False):
+    """Make n (or n_pre) physically realistic, by imposing a minimum and
+    a cutoff, and makes f and g the appropriate things for an incoming plane
+    wave."""
+
+    prob.sharp_cutoff(np.array((0.5,0.5)),0.75,apply_to_preconditioner)
+
+    prob.n_min(0.1,apply_to_preconditioner)
+
+    prob.f_g_scattered_plane_wave([np.cos(angle),np.sin(angle)])    
+    

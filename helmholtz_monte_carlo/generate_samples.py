@@ -200,9 +200,6 @@ def generate_samples(k,h_spec,J,nu,M,
                                                             prob.n_stoch,J,point_generation_method,
                                                             prob.n_stoch.current_and_unsampled_points(),
                                                             shift_no)
-                # For debugging
-                print('Number of centres',len(centres))
-                print('Nearest centre for each point',nearest_centre)
             else:
                 centres = None
                 nearest_centre = None
@@ -337,8 +334,6 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,
 
     # For testing purposes
     dummy = 1.0
-
-    print('physically realistic',physically_realistic)
     
     if nearby_preconditioning:
         # Order points with respect to the preconditioner that is used
@@ -371,7 +366,6 @@ def all_qoi_samples(prob,qois,comm,display_progress,centres=None,
             print(sample_no,flush=True)
 
         prob.solve()
-        print('GMRES',prob.GMRES_its)
         
         if nearby_preconditioning:
             GMRES_its.append(prob.GMRES_its)
@@ -717,8 +711,8 @@ def update_centre(prob,J,delta,lambda_mult,j_scaling,n_0,new_centre,angle,physic
     prob.set_n_pre(n_pre_instance.coeff)
 
     if physically_realistic:
-        print('AWOOGA!')
         make_physically_realistic(prob,angle,apply_to_preconditioner=True)
+        
     return new_centre
 
 def make_physically_realistic(prob,angle,apply_to_preconditioner=False):

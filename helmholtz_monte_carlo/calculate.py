@@ -37,7 +37,7 @@ def mean_and_error(mc_output,point_generation_method):
             # Calculate the error - formula taken from
             # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
             # 230, pp. 3668-3694 (2011), equation (4.4)]
-            this_error = np.sqrt(((samples[ii] - this_approx)**2.0).sum()\
+            this_error = np.sqrt((np.abs(samples[ii] - this_approx)**2.0).sum()\
                                  /(float(N)*float(N-1)))
             error.append(this_error)
 
@@ -63,7 +63,7 @@ def mean_and_error(mc_output,point_generation_method):
         # Calculate the error for each qoi - formula taken from
         # [Graham, Kuo, Nuyens, Scheichl, Sloan, JCP
         # 230, pp. 3668-3694 (2011), equation (4.6)]
-        error = [np.sqrt(((approx[ii]-approx_for_each_shift[ii])**2).sum()\
+        error = [np.sqrt((np.abs(approx[ii]-approx_for_each_shift[ii])**2).sum()\
                          /(float(nu)*(float(nu)-1.0))) for ii in range(num_qois)]
 
     # Save data frame to file with extra metadata (how? -
